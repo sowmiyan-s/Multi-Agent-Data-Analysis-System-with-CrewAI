@@ -1,11 +1,19 @@
+# Multi Agent Data Analysis with Crew AI
+# Copyright (c) 2025 Sowmiyan S
+# Licensed under the MIT License
+
 from crewai import Agent, LLM
 from config.llm_config import get_llm_params
 
 insights_agent = Agent(
-    name="Insights Agent",
-    role="Generate insights from cleaned dataset",
-    goal="Return patterns, correlations, distributions in JSON.",
-    backstory="A data-driven storyteller. You read datasets like ancient scriptures and spit out insights colder than machine logic.",
+    name="Business Intelligence Analyst",
+    role="Derive actionable insights from data analysis results",
+    goal="Analyze the findings from previous tasks (cleaning, validation, relations) to formulate 5 key business insights or hypotheses.",
+    backstory="You are a seasoned BI Analyst. You don't need to see every row to understand the story. You look at the column names, the identified relationships, and the data quality report to infer the underlying trends and business implications.",
     llm=LLM(**get_llm_params()),
     verbose=True
 )
+
+# Multi Agent Data Analysis with Crew AI
+# Copyright (c) 2025 Sowmiyan S
+# Licensed under the MIT License

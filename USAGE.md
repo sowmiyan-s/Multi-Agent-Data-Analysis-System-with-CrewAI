@@ -2,29 +2,26 @@
 
 ## Overview
 
-The CrewAI Data Analyst Agent is a streamlined tool for automated data analysis. It processes CSV files, identifies relationships, and generates insightful reports with visualizations.
+**Multi Agent Data Analysis with Crew AI** is a premium "Data Analysis as a Service" tool. It uses a swarm of specialized AI agents to clean, validate, analyze, and visualize your datasets automatically.
 
 ## Prerequisites
 
-- **Python**: Version 3.8 or higher
-- **Dependencies**: Install via `pip install -r requirements.txt`
-- **LLM Backend (Optional)**: Ollama for enhanced analysis
-  - Download from [ollama.ai](https://ollama.ai)
-  - Pull a model: `ollama pull llama3`
-  - Run in background: `ollama serve`
+- **Python**: Version 3.10 or higher
+- **API Key**: A Groq, OpenAI, or Anthropic API key (or a local Ollama setup).
 
 ## Installation
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/CrewAI-Data-Analyst-Agent.git
-   cd CrewAI-Data-Analyst-Agent
+   git clone https://github.com/yourusername/Multi-Agent-Data-Analysis.git
+   cd Multi-Agent-Data-Analysis
    ```
 
 2. Create a virtual environment:
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1  # Windows
+   # source .venv/bin/activate   # Mac/Linux
    ```
 
 3. Install dependencies:
@@ -32,105 +29,73 @@ The CrewAI Data Analyst Agent is a streamlined tool for automated data analysis.
    pip install -r requirements.txt
    ```
 
+4. Configure your environment:
+   Create a `.env` file in the root directory:
+   ```env
+   LLM_PROVIDER=groq
+   GROQ_API_KEY=your_groq_api_key_here
+   ```
+
 ## Quick Start
 
-1. Place your CSV file in the `data/` directory (e.g., `data/input.csv`).
+1. **Prepare Data**: Ensure your CSV file is ready.
 
-2. Run the analysis:
+2. **Run the System**:
    ```bash
    python crew.py
    ```
 
-3. View results: The browser will automatically open `index.html` with the analysis report.
+3. **Input Path**: When prompted, paste the full path to your CSV file (or press Enter to use the default `data/input.csv`).
 
-## Detailed Usage
+4. **View Results**: 
+   - The system will automatically open `index.html` in your default browser.
+   - This report contains your Data Quality Score, Cleaning Logs, Visualizations, and Business Insights.
 
-### Input Data
-- Supported format: CSV
-- Place files in `data/input.csv` or modify `crew.py` to specify a different path
-- Ensure data is clean and properly formatted for best results
+## Detailed Features
 
-### Output
-- **HTML Report**: `index.html` - Interactive report with insights and visualizations
-- **Console Output**: Real-time pipeline execution logs
-- **Outputs Directory**: Additional generated files (e.g., code snippets in `outputs/op.py`)
+### 1. Data Quality Assurance
+The **Data Quality Assurance Specialist** scans your dataset for:
+- Missing values and anomalies
+- Sufficient volume for analysis
+- Data type consistency
+- **Output**: A 0-100 Quality Score and a GO/NO-GO decision.
 
-### Customization
+### 2. Automated Cleaning
+The **Data Cleaner** agent:
+- Removes duplicates
+- Fills missing values (Mean for numeric, Mode for categorical)
+- Standardizes formats
 
-#### Modifying Agents
-Edit agent configurations in `agents/*.py`:
-- Change LLM model or endpoint
-- Adjust agent backstories and goals
-- Update prompts for specific analysis needs
+### 3. Relationship Analysis
+The **Relationship Analyst**:
+- Identifies correlations between columns
+- Selects the best visualization type (Scatter, Bar, Line, Heatmap, etc.)
 
-#### Extending the Pipeline
-Add more agents by uncommenting in `crew.py` and updating `workflows/pipeline.py`:
-- Data cleaning: Uncomment `cleaner_agent`
-- Validation: Uncomment `validator_agent`
-- Code generation: Uncomment `code_gen_agent`
+### 4. Visualization Generation
+The **Code Generator**:
+- Writes bug-free Matplotlib/Seaborn code
+- Executes the code to generate charts embedded in the report
 
-#### Configuration
-- LLM settings: Modify `config/llm_config.py`
-- Pipeline tasks: Edit `workflows/pipeline.py`
-
-## Examples
-
-### Basic Analysis
-```bash
-python crew.py
-# Analyzes data/input.csv and generates index.html
-```
-
-### Custom Dataset
-1. Place your CSV in `data/custom.csv`
-2. Modify `crew.py` to load `data/custom.csv`
-3. Run `python crew.py`
-
-### Advanced Configuration
-- For different LLM models, update `agents/relation.py` with new `base_url` and model name
-- Adjust task parameters in `workflows/pipeline.py` for specific analysis goals
+### 5. Business Intelligence
+The **Business Intelligence Analyst**:
+- Synthesizes all findings into actionable strategic insights.
 
 ## Troubleshooting
 
-### Common Issues
+### Rate Limit Errors
+If you see `RateLimitError`:
+- Switch to a smaller model in `config/llm_config.py` (e.g., `llama-3.1-8b-instant`).
+- The system is optimized to minimize token usage, but heavy usage may still hit free tier limits.
 
-**ModuleNotFoundError**
-```
-pip install crewai pandas matplotlib seaborn
-```
-
-**Connection Refused (LLM)**
-- Ensure Ollama is running: `ollama serve`
-- Check network connectivity to `http://localhost:11434`
-- Analysis will proceed without LLM if connection fails
-
-**UnicodeEncodeError**
-- Resolved in latest version; uses UTF-8 encoding
-- If issues persist, ensure CSV files are UTF-8 encoded
-
-**Browser Not Opening**
-- Manually open `index.html` in your browser
-- Check file permissions
-
-### Performance Tips
-- Use smaller datasets for faster processing
-- Ensure sufficient RAM for large CSV files
-- Close other applications during analysis
-
-## Best Practices
-
-- **Data Preparation**: Clean and validate input data before analysis
-- **Version Control**: Use `.gitignore` to exclude sensitive files (e.g., `.env`)
-- **Environment**: Always use virtual environments
-- **Updates**: Check CHANGELOG.md for latest features and fixes
+### Browser Not Opening
+- Manually open `index.html` in your browser.
 
 ## Support
 
-For issues or questions:
-- Check the [GitHub Issues](https://github.com/yourusername/CrewAI-Data-Analyst-Agent/issues) page
-- Review the README.md for additional documentation
-- Ensure all prerequisites are met before reporting bugs
+For issues, please open a ticket on our GitHub repository.
 
 ---
 
-*Last updated: October 2023*
+*Multi Agent Data Analysis with Crew AI*
+*Copyright (c) 2025 Sowmiyan S*
+*Licensed under the MIT License*

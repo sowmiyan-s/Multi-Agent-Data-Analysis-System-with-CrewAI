@@ -1,3 +1,7 @@
+# Multi Agent Data Analysis with Crew AI
+# Copyright (c) 2025 Sowmiyan S
+# Licensed under the MIT License
+
 from crewai import Agent, LLM
 from config.llm_config import get_llm_params
 
@@ -9,3 +13,7 @@ cleaner_agent = Agent(
     llm=LLM(**get_llm_params()),
     verbose=True
 )
+
+# Multi Agent Data Analysis with Crew AI
+# Copyright (c) 2025 Sowmiyan S
+# Licensed under the MIT License

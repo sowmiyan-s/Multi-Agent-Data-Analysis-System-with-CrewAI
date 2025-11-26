@@ -1,27 +1,30 @@
 # Changelog
 
-All notable changes to the CrewAI Data Analyst Agent will be documented in this file.
+All notable changes to the Multi Agent Data Analysis with Crew AI project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2023-10-XX
+## [2.0.0] - 2025-11-26
 
-### Added
-- Professional documentation structure with README.md, USAGE.md, and CHANGELOG.md
-- API flow and architecture diagrams in assets/
-- Comprehensive usage guide with examples and troubleshooting
-- Table of contents and improved navigation in README.md
-- Contributing guidelines and development setup instructions
+### Major Features
+- **Data Analysis as a Service**: Rebranded and restructured for premium service delivery.
+- **Enhanced Validator Agent**: Now acts as a "Data Quality Assurance Specialist" providing detailed quality scores (0-100), decision logic, and specific warnings.
+- **Business Intelligence Agent**: Upgraded Insights Agent to a "Business Intelligence Analyst" role, focusing on synthesizing findings from cleaning, validation, and relation tasks.
+- **Token Optimization**: Significantly reduced token usage by removing dynamic data context injection and optimizing agent prompts.
+- **Professional Reporting**: Updated `index.html` with a modern, dark-themed UI, visual scorecards for data quality, and structured insight presentation.
 
 ### Changed
-- Renamed SIMPLIFICATION_COMPLETE.md to CHANGELOG.md for standard versioning
-- Enhanced README.md with professional formatting and visual elements
-- Expanded USAGE.md with detailed installation, usage, and customization sections
-- Improved project structure documentation
+- **Project Branding**: Renamed to "Multi Agent Data Analysis with Crew AI".
+- **Agent Roles**: 
+    - Validator: Dataset Validator -> Data Quality Assurance Specialist
+    - Insights: Insights Agent -> Business Intelligence Analyst
+- **Workflow**: Streamlined pipeline to use static task definitions for better efficiency.
+- **Licensing**: Added MIT License and copyright headers to all source files.
 
 ### Fixed
-- Documentation inconsistencies and formatting issues
+- **Rate Limit Issues**: Optimized prompts and removed heavy context to prevent LLM rate limit errors.
+- **Task Conflicts**: Resolved overlapping task descriptions between Validator and Insights agents.
 
 ## [1.0.0] - 2023-10-XX
 
@@ -31,37 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automated CSV processing and analysis pipeline
 - HTML report generation with interactive elements
 - LLM integration via Ollama backend
-- Auto-browser launch functionality
-
-### Changed
-- Simplified pipeline from 5 agents to 1 focused agent for better performance
-- Removed complex error handling and nested task descriptions
-- Streamlined agent backstories and goals
-- Cleaned up code with plain Python implementation
-
-### Technical Details
-- **Before**: 5 agents (cleaner, validator, relation, code_gen, insights) = complexity
-- **After**: 1 agent (relation) = focused, fast, simple
-- Removed regex parsing, recursive data extraction, and complex JSON handling
-- Added automatic browser opening for results
-
-### File Changes
-- `crew.py`: Complete rewrite - simplified to 109 lines
-- `workflows/pipeline.py`: Reduced to 1 task instead of 5
-- `agents/relation.py`: Streamlined goal & backstory
-- `agents/code_gen.py`: Simplified role
-- Other agents kept as-is for future expansion
 
 ---
 
-## Types of Changes
-- `Added` for new features
-- `Changed` for changes in existing functionality
-- `Deprecated` for soon-to-be removed features
-- `Removed` for now removed features
-- `Fixed` for any bug fixes
-- `Security` in case of vulnerabilities
-
----
-
-**Status**: ✅ Working | 🚀 Ready to Deploy | 📊 Data Analysis Ready
+**Status**: ✅ Working | 🚀 Production Ready | 📊 Data Analysis as a Service

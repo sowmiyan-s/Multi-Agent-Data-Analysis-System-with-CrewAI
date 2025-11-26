@@ -1,15 +1,7 @@
-"""
-Centralized LLM Configuration
 
-This file allows you to easily switch between different LLM providers
-without modifying individual agent files.
-
-Supported providers:
-- groq: Groq cloud API (fast, recommended)
-- openai: OpenAI API
-- ollama: Local Ollama server
-- anthropic: Anthropic Claude API
-"""
+# Multi Agent Data Analysis with Crew AI
+# Copyright (c) 2025 Sowmiyan S
+# Licensed under the MIT License
 
 import os
 from dotenv import load_dotenv
@@ -47,6 +39,8 @@ ANTHROPIC_CONFIG = {
     "api_key": os.getenv("ANTHROPIC_API_KEY"),
 }
 
+
+
 # ========================
 # PROVIDER MAP
 # ========================
@@ -59,12 +53,7 @@ PROVIDER_CONFIGS = {
 
 
 def get_llm_config():
-    """
-    Get the current LLM configuration based on PROVIDER setting.
     
-    Returns:
-        dict: Configuration dictionary with model and api_key/base_url
-    """
     if PROVIDER not in PROVIDER_CONFIGS:
         raise ValueError(
             f"Invalid LLM provider: {PROVIDER}. "
@@ -85,12 +74,7 @@ def get_llm_config():
 
 
 def get_llm_params():
-    """
-    Get LLM parameters ready for CrewAI LLM initialization.
     
-    Returns:
-        dict: Parameters to pass to LLM() constructor
-    """
     config = get_llm_config()
     
     params = {"model": config["model"]}
@@ -107,43 +91,8 @@ def get_llm_params():
 # ========================
 # USAGE INSTRUCTIONS
 # ========================
-"""
-HOW TO USE:
 
-1. In your .env file or Replit Secrets, set:
-   LLM_PROVIDER=groq  (or openai, ollama, anthropic)
-   GROQ_API_KEY=your_key_here
-   
-2. In your agent files, import and use:
-   from crewai import Agent, LLM
-   from config.llm_config import get_llm_params
-   
-   my_agent = Agent(
-       name="My Agent",
-       role="My Role",
-       goal="My Goal",
-       backstory="My Backstory",
-       llm=LLM(**get_llm_params()),
-       verbose=True
-   )
+# Multi Agent Data Analysis with Crew AI
+# Copyright (c) 2025 Sowmiyan S
+# Licensed under the MIT License
 
-3. To switch providers, just change LLM_PROVIDER in your .env file!
-
-EXAMPLES:
-
-# Use Groq (default)
-LLM_PROVIDER=groq
-GROQ_API_KEY=gsk_...
-
-# Use OpenAI
-LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-...
-
-# Use local Ollama
-LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434
-
-# Use Anthropic
-LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-"""
