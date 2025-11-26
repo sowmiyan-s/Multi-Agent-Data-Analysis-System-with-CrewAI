@@ -3,8 +3,3 @@ pandas>=1.5
 matplotlib>=3.6
 seaborn>=0.12
 requests
-crewai
-matplotlib
-pandas
-requests
-seaborn

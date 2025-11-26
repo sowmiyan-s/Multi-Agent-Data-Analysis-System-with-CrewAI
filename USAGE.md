@@ -45,7 +45,7 @@
    python crew.py
    ```
 
-3. **Input Path**: When prompted, paste the full path to your CSV file (or press Enter to use the default `data/input.csv`).
+3. **Input Path**: When prompted, paste the full path to your CSV file (or press Enter to use the default `data/TB_Burden_Country.csv`).
 
 4. **View Results**: 
    - The system will automatically open `index.html` in your default browser.

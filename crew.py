@@ -39,11 +39,11 @@ def main():
     print("=" * 50)
     
     try:
-        default_path = (Path.cwd() / "Data Set" / "TB_Burden_Country.csv").resolve()
-        a = input(f"Enter the load data/input.csv  ") or str(default_path)
+        default_path = (Path.cwd() / "data" / "TB_Burden_Country.csv").resolve()
+        a = input(f"Enter the path to your CSV file (default: {default_path.name}): ") or str(default_path)
         df = pd.read_csv(a)
     except FileNotFoundError:
-        print("Error: data/input.csv not found.")
+        print(f"Error: File not found at {a}")
         sys.exit(1)
 
     print(f"Loaded {len(df)} rows, {len(df.columns)} columns")
