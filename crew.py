@@ -1,3 +1,7 @@
+# Multi Agent Data Analysis with Crew AI
+# Copyright (c) 2025 Sowmiyan S
+# Licensed under the MIT License
+
 
 import logging
 import sys
@@ -24,15 +28,19 @@ except ImportError as e:
 
 
 def main():
+    
+    
+    
     output_dir = Path("outputs")
     output_dir.mkdir(exist_ok=True)
     
     print("=" * 50)
-    print("CrewAI Data Analyst")
+    print("Multi Agent Data Analysis with Crew AI")
     print("=" * 50)
     
     try:
-        a = input("Enter the load data/input.csv : ")
+        default_path = (Path.cwd() / "Data Set" / "TB_Burden_Country.csv").resolve()
+        a = input(f"Enter the load data/input.csv (default: {default_path}): ") or str(default_path)
         df = pd.read_csv(a)
     except FileNotFoundError:
         print("Error: data/input.csv not found.")
@@ -40,6 +48,32 @@ def main():
 
     print(f"Loaded {len(df)} rows, {len(df.columns)} columns")
     print(f"Columns: {', '.join(df.columns[:10])}...")
+
+    # Data Cleaning
+    print("\n--- Starting Data Cleaning ---")
+    df = df.drop_duplicates()
+    
+    # Fill numeric missing values with mean
+    numeric_cols = df.select_dtypes(include=['number']).columns
+    df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
+    
+    # Fill categorical missing values with mode
+    categorical_cols = df.select_dtypes(include=['object']).columns
+    for col in categorical_cols:
+        if df[col].isnull().any():
+            mode_val = df[col].mode()
+            if not mode_val.empty:
+                df[col] = df[col].fillna(mode_val[0])
+            else:
+                df[col] = df[col].fillna("Unknown")
+
+    cleaned_file_path = Path("data") / "cleaned_csv.csv"
+    df.to_csv(cleaned_file_path, index=False)
+    print(f"Cleaned dataset saved to {cleaned_file_path}")
+    
+    # Update dataset path for agents
+    a = str(cleaned_file_path.absolute())
+    print("--- Data Cleaning Complete ---\n")
 
 
     from agents.cleaner import cleaner_agent
@@ -55,12 +89,8 @@ def main():
         insight_task,
     )
 
-    # Dynamic Task Updates
-    clean_task.description = f"Clean the dataset ({a}) and return JSON steps or [] if none."
-    
-    relation_task.description = f"Identify visualization relationships between columns. The dataset is at '{a}'. The columns are: {list(df.columns)}."
-    
-    code_task.description = f"Generate runnable matplotlib/seaborn code for each relation. The dataset is at '{a}'. Use this exact path in the code. The columns are: {list(df.columns)}."
+
+
     
     crew = Crew(
         agents=[
@@ -126,10 +156,12 @@ def main():
             <section class="section">
                 <div class="section-header">
                     <h2>{section}</h2>
-                    <span class="section-id">{step_number:02d}</span>
+                    <span class="step-number">{step_number:02d}</span>
                 </div>
-                <div class="code-block">
-                    <pre><code class="language-{lang}">{content}</code></pre>
+                <div class="content-wrapper">
+                    <div class="code-block">
+                        <pre><code class="language-{lang}">{content}</code></pre>
+                    </div>
                 </div>
             </section>
             """
@@ -137,9 +169,11 @@ def main():
         <section class="section">
             <div class="section-header">
                 <h2>{section}</h2>
-                <span class="section-id">{step_number:02d}</span>
+                <span class="step-number">{step_number:02d}</span>
             </div>
-            <p style="color: var(--text-secondary); font-style: italic;">No data available</p>
+            <div class="content-wrapper" style="padding: 2rem; text-align: center; color: var(--text-secondary); font-style: italic;">
+                No data available
+            </div>
         </section>
         """
     
@@ -150,9 +184,9 @@ def main():
     <section class="section">
         <div class="section-header">
             <h2>Dataset Preview</h2>
-            <span class="section-id">01</span>
+            <span class="step-number">01</span>
         </div>
-        <div class="table-wrapper">
+        <div class="table-container">
             {df_html}
         </div>
     </section>
@@ -204,34 +238,40 @@ def main():
     """
 
     html_report = f"""<!DOCTYPE html>
+<!-- 
+Multi Agent Data Analysis with Crew AI
+Copyright (c) 2025 Sowmiyan S
+Licensed under the MIT License
+-->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CrewAI Data Analysis Report</title>
+    <title>Multi Agent Data Analysis with Crew AI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         :root {{
-            --bg-body: #ffffff;
-            --bg-surface: #f8f9fa;
-            --border-color: #e2e8f0;
-            --text-primary: #0f172a;
-            --text-secondary: #475569;
-            --accent-color: #2563eb;
-            --code-bg: #f1f5f9;
-            --success-bg: #dcfce7;
-            --success-text: #166534;
-            --font-sans: 'Inter', sans-serif;
+            --bg-body: #f3f4f6;
+            --bg-card: #ffffff;
+            --text-primary: #111827;
+            --text-secondary: #4b5563;
+            --accent-primary: #2563eb;
+            --accent-secondary: #1e40af;
+            --border-subtle: #e5e7eb;
+            --code-bg: #1e1e1e;
+            --code-text: #d4d4d4;
+            --success-color: #10b981;
+            --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
             --font-mono: 'JetBrains Mono', monospace;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
         }}
 
-        * {{
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }}
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 
         body {{
             background-color: var(--bg-body);
@@ -239,196 +279,197 @@ def main():
             font-family: var(--font-sans);
             line-height: 1.6;
             -webkit-font-smoothing: antialiased;
-            padding: 40px 20px;
+            padding: 2rem;
         }}
 
         .container {{
-            max-width: 900px;
+            max-width: 1000px;
             margin: 0 auto;
         }}
 
         /* Header */
         .header {{
-            margin-bottom: 60px;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 30px;
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem 0;
         }}
 
-        .brand-label {{
-            font-family: var(--font-mono);
+        .brand-badge {{
+            display: inline-block;
+            background: var(--accent-primary);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
             font-size: 0.75rem;
-            color: var(--accent-color);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
             font-weight: 600;
-            margin-bottom: 12px;
-            display: block;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+            box-shadow: var(--shadow-sm);
         }}
 
         h1 {{
             font-size: 2.5rem;
-            font-weight: 700;
-            letter-spacing: -0.03em;
+            font-weight: 800;
             color: var(--text-primary);
-            margin-bottom: 20px;
-            line-height: 1.1;
+            letter-spacing: -0.025em;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }}
 
-        .meta-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 20px;
-            margin-top: 30px;
-        }}
-
-        .meta-item {{
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }}
-
-        .meta-label {{
-            font-size: 0.75rem;
+        .subtitle {{
             color: var(--text-secondary);
-            text-transform: uppercase;
-            font-weight: 500;
-        }}
-
-        .meta-value {{
-            font-family: var(--font-mono);
-            font-size: 0.9rem;
-            font-weight: 500;
+            font-size: 1.1rem;
         }}
 
         /* Status Banner */
         .status-banner {{
-            background: var(--success-bg);
-            color: var(--success-text);
-            padding: 12px 20px;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            font-weight: 500;
+            background: white;
+            border-left: 4px solid var(--success-color);
+            padding: 1rem 1.5rem;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 50px;
+            gap: 0.75rem;
+            margin-bottom: 3rem;
+            font-weight: 500;
+            color: var(--text-primary);
         }}
 
-        .status-icon {{
-            width: 8px;
-            height: 8px;
-            background: currentColor;
+        .status-dot {{
+            width: 10px;
+            height: 10px;
+            background-color: var(--success-color);
             border-radius: 50%;
+            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
         }}
 
-        /* Sections */
+        /* Cards */
         .section {{
-            margin-bottom: 60px;
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            margin-bottom: 2rem;
+            overflow: hidden;
+            border: 1px solid var(--border-subtle);
+            transition: transform 0.2s ease;
+        }}
+
+        .section:hover {{
+            transform: translateY(-2px);
         }}
 
         .section-header {{
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--border-subtle);
             display: flex;
-            align-items: baseline;
             justify-content: space-between;
-            margin-bottom: 24px;
-            border-bottom: 2px solid var(--text-primary);
-            padding-bottom: 12px;
+            align-items: center;
+            background: #fafafa;
         }}
 
         h2 {{
             font-size: 1.25rem;
             font-weight: 600;
             color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }}
 
-        .section-id {{
+        .step-number {{
             font-family: var(--font-mono);
-            font-size: 0.8rem;
+            font-size: 0.875rem;
             color: var(--text-secondary);
+            background: var(--border-subtle);
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-md);
         }}
 
-        /* Code Blocks */
+        /* Content Areas */
+        .content-wrapper {{
+            padding: 0;
+        }}
+
         .code-block {{
             background: var(--code-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 20px;
+            padding: 1.5rem;
             overflow-x: auto;
             font-family: var(--font-mono);
-            font-size: 0.85rem;
-            color: #334155;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: var(--code-text);
+            border-bottom-left-radius: var(--radius-lg);
+            border-bottom-right-radius: var(--radius-lg);
         }}
 
         /* Table Styles */
-        .table-wrapper {{
-            overflow: auto;
+        .table-container {{
+            overflow-x: auto;
             max-height: 500px;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            background: var(--bg-surface);
-            margin-top: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }}
 
         table.data-table {{
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.85rem;
+            font-size: 0.875rem;
             font-family: var(--font-mono);
             white-space: nowrap;
         }}
 
-        table.data-table th, table.data-table td {{
-            padding: 12px 16px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-        }}
-
         table.data-table th {{
-            background: var(--bg-surface);
+            background: #f8fafc;
+            color: var(--text-secondary);
             font-weight: 600;
-            color: var(--text-primary);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            padding: 1rem 1.5rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-subtle);
             position: sticky;
             top: 0;
             z-index: 10;
-            border-bottom: 2px solid var(--border-color);
         }}
 
-        table.data-table tr:last-child td {{
-            border-bottom: none;
+        table.data-table td {{
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-primary);
         }}
 
-        table.data-table tr:hover {{
-            background-color: var(--code-bg);
-        }}
-        
-        pre {{
-            margin: 0;
-        }}
+        table.data-table tr:last-child td {{ border-bottom: none; }}
+        table.data-table tr:hover td {{ background-color: #f9fafb; }}
 
-        /* Syntax Highlighting */
-        .key {{ color: #7c3aed; font-weight: 600; }}
-        .string {{ color: #059669; }}
-        .number {{ color: #ea580c; }}
-        .boolean {{ color: #2563eb; font-weight: 600; }}
-        .null {{ color: #db2777; }}
-        .keyword {{ color: #db2777; font-weight: 600; }}
-        .comment {{ color: #9ca3af; font-style: italic; }}
-        .function {{ color: #2563eb; }}
+        /* Syntax Highlighting (Dark Theme) */
+        .keyword {{ color: #c586c0; font-weight: bold; }} /* Purple */
+        .string {{ color: #ce9178; }} /* Orange */
+        .number {{ color: #b5cea8; }} /* Light Green */
+        .boolean {{ color: #569cd6; }} /* Blue */
+        .key {{ color: #9cdcfe; }} /* Light Blue */
+        .comment {{ color: #6a9955; font-style: italic; }} /* Green */
+        .null {{ color: #569cd6; }}
 
         /* Footer */
         .footer {{
-            margin-top: 80px;
-            padding-top: 40px;
-            border-top: 1px solid var(--border-color);
             text-align: center;
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border-subtle);
             color: var(--text-secondary);
-            font-size: 0.85rem;
+            font-size: 0.875rem;
         }}
 
-        @media (max-width: 600px) {{
+        .footer p {{ margin-bottom: 0.5rem; }}
+
+        @media (max-width: 768px) {{
+            body {{ padding: 1rem; }}
             h1 {{ font-size: 2rem; }}
-            .meta-grid {{ grid-template-columns: 1fr; }}
+            .section-header {{ padding: 1rem; }}
+            .code-block {{ padding: 1rem; }}
         }}
     </style>
     {script_content}
@@ -436,32 +477,37 @@ def main():
 <body>
     <div class="container">
         <header class="header">
-            <span class="brand-label">CrewAI Multi-Agent System : Data Analysis</span>
-            <h1>OUTPUT FROM LLM : </h1>
-            
-       
+            <span class="brand-badge">Multi Agent Data Analysis with Crew AI</span>
+            <h1>Data Analysis Report</h1>
+            <p class="subtitle">Data Analysis as a Service | Automated insights generated by multi-agent swarm</p>
         </header>
 
         <div class="status-banner">
-            <div class="status-icon"></div>
-            Pipeline completed successfully. All agents executed without errors.
+            <div class="status-dot"></div>
+            <span>Pipeline executed successfully. All agents completed their tasks.</span>
         </div>
 
         {final_blocks}
 
         <footer class="footer">
-            <p>Generated by CrewAI Multi-Agent System</p>
-            <p>Prithiv.A.K  Sebin.S  Sowmiyan.s</p>
+            <p><strong>Multi Agent Data Analysis with Crew AI</strong></p>
+            <p>Developed by Prithiv.A.K, Sebin.S, Sowmiyan.s</p>
+            <p style="font-size: 0.75rem; margin-top: 1rem; opacity: 0.7;">Generated on {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
         </footer>
     </div>
 </body>
+<!-- 
+Multi Agent Data Analysis with Crew AI
+Copyright (c) 2025 Sowmiyan S
+Licensed under the MIT License
+-->
 </html>
 """
     
     report_file = Path("index.html")
     report_file.write_text(html_report, encoding="utf-8")
     print(f"\nReport saved: {report_file}")
-    print("CrewAI Multi-Agent System : Data Analysis")
+    print("Multi Agent Data Analysis with Crew AI")
     print("Prithiv.A.K  Sebin.S  Sowmiyan.s")
     webbrowser.open("index.html")
 

@@ -1,3 +1,7 @@
+# Multi Agent Data Analysis with Crew AI
+# Copyright (c) 2025 Sowmiyan S
+# Licensed under the MIT License
+
 import pandas as pd
 import json
 
@@ -13,3 +17,7 @@ def apply_cleaning(df, cleaning_json):
             df = df.rename(columns={rule["old"]: rule["new"]})
 
     return df
+
+# Multi Agent Data Analysis with Crew AI
+# Copyright (c) 2025 Sowmiyan S
+# Licensed under the MIT License

@@ -1,53 +1,46 @@
-import matplotlib.pyplot as plt
 import pandas as pd
+import matplotlib.pyplot as plt
 import seaborn as sns
 
 # Load the dataset
-df = pd.read_csv('C:\\\\Users\\\\Asus\\\\Documents\\\\DATA SETS\\\\CSV DATA SETS\\\\sugar.csv')
+data = pd.read_csv('data/cleaned_csv.csv')
 
-# Define the relations
-relations = [
-    {'x':'Age','y':'Pregnancies','type':'scatter'},
-    {'x':'Age','y':'Glucose','type':'scatter'},
-    {'x':'Age','y':'BloodPressure (mg/dL)','type':'scatter'},
-    {'x':'Age','y':'SkinThickness','type':'scatter'},
-    {'x':'Age','y':'Insulin','type':'scatter'},
-    {'x':'Age','y':'BMI','type':'scatter'},
-    {'x':'Age','y':'DiabetesPedigreeFunction','type':'scatter'},
-    {'x':'Pregnancies','y':'Glucose','type':'scatter'},
-    {'x':'Pregnancies','y':'BloodPressure (mg/dL)','type':'scatter'},
-    {'x':'Pregnancies','y':'SkinThickness','type':'scatter'},
-    {'x':'Pregnancies','y':'Insulin','type':'scatter'},
-    {'x':'Pregnancies','y':'BMI','type':'scatter'},
-    {'x':'Pregnancies','y':'DiabetesPedigreeFunction','type':'scatter'},
-    {'x':'Glucose','y':'BloodPressure (mg/dL)','type':'scatter'},
-    {'x':'Glucose','y':'SkinThickness','type':'scatter'},
-    {'x':'Glucose','y':'Insulin','type':'scatter'},
-    {'x':'Glucose','y':'BMI','type':'scatter'},
-    {'x':'Glucose','y':'DiabetesPedigreeFunction','type':'scatter'},
-    {'x':'BloodPressure (mg/dL)','y':'SkinThickness','type':'scatter'},
-    {'x':'BloodPressure (mg/dL)','y':'Insulin','type':'scatter'},
-    {'x':'BloodPressure (mg/dL)','y':'BMI','type':'scatter'},
-    {'x':'BloodPressure (mg/dL)','y':'DiabetesPedigreeFunction','type':'scatter'},
-    {'x':'SkinThickness','y':'Insulin','type':'scatter'},
-    {'x':'SkinThickness','y':'BMI','type':'scatter'},
-    {'x':'SkinThickness','y':'DiabetesPedigreeFunction','type':'scatter'},
-    {'x':'Insulin','y':'BMI','type':'scatter'},
-    {'x':'Insulin','y':'DiabetesPedigreeFunction','type':'scatter'},
-    {'x':'BMI','y':'DiabetesPedigreeFunction','type':'scatter'}
-]
+# Plot 1: Scatter plot
+plt.figure(figsize=(10,6))
+sns.scatterplot(x='age', y='income', data=data)
+plt.title('Scatter Plot of Age vs Income')
+plt.xlabel('Age')
+plt.ylabel('Income')
+plt.show()
 
-# Create subplots for each relation
-fig, axes = plt.subplots(nrows=len(relations), ncols=1, figsize=(10, 50))
+# Plot 2: Bar plot
+plt.figure(figsize=(10,6))
+sns.barplot(x='gender', y='income', data=data)
+plt.title('Bar Plot of Gender vs Income')
+plt.xlabel('Gender')
+plt.ylabel('Income')
+plt.show()
 
-# Loop over each relation
-for i, relation in enumerate(relations):
-    # Plot the scatter plot
-    sns.scatterplot(x=relation['x'], y=relation['y'], data=df, ax=axes[i])
-    axes[i].set_title(f"{relation['x']} vs {relation['y']}")
+# Plot 3: Histogram
+plt.figure(figsize=(10,6))
+sns.histplot(x='age', data=data, kde=True)
+plt.title('Histogram of Age')
+plt.xlabel('Age')
+plt.ylabel('Count')
+plt.show()
 
-# Layout so plots do not overlap
-plt.tight_layout()
+# Plot 4: Box plot
+plt.figure(figsize=(10,6))
+sns.boxplot(x='gender', y='income', data=data)
+plt.title('Box Plot of Gender vs Income')
+plt.xlabel('Gender')
+plt.ylabel('Income')
+plt.show()
 
-# Show the plot
+# Plot 5: Heatmap
+plt.figure(figsize=(10,6))
+sns.kdeplot(x='age', y='income', data=data, cmap='Blues', shade=True, shade_lowest=False)
+plt.title('Heatmap of Age vs Income')
+plt.xlabel('Age')
+plt.ylabel('Income')
 plt.show()
