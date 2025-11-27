@@ -40,13 +40,12 @@ st.markdown("""
     
     /* Headers */
     h1 {
-        background: linear-gradient(90deg, #a855f7, #3b82f6);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 700 !important;
-        font-size: 3.5rem !important;
+        color: #ffffff !important;
+        font-weight: 800 !important;
+        font-size: 3.2rem !important;
         letter-spacing: -1px;
         padding-bottom: 1rem;
+        text-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
     }
     
     h2 {
@@ -54,7 +53,7 @@ st.markdown("""
         font-weight: 600 !important;
         font-size: 1.8rem !important;
         margin-top: 2.5rem !important;
-        border-left: 4px solid #a855f7;
+        border-left: 4px solid #e879f9;
         padding-left: 1rem;
     }
     
@@ -73,21 +72,22 @@ st.markdown("""
     
     /* Buttons */
     .stButton>button {
-        background: linear-gradient(90deg, #7c3aed, #2563eb);
-        color: white;
+        background: linear-gradient(90deg, #c084fc, #22d3ee);
+        color: #000000;
         border: none;
         padding: 0.8rem 1.5rem;
-        font-weight: 600;
+        font-weight: 700;
         border-radius: 8px;
         transition: all 0.3s ease;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         font-size: 0.9rem;
-        box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
+        box-shadow: 0 4px 15px rgba(192, 132, 252, 0.3);
     }
     .stButton>button:hover {
         transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(124, 58, 237, 0.5);
+        box-shadow: 0 8px 20px rgba(192, 132, 252, 0.5);
+        color: #000000;
     }
     
     /* DataFrames */
@@ -108,14 +108,14 @@ st.markdown("""
     }
     .styled-bullet:hover {
         transform: translateX(5px);
-        border-color: #a855f7;
+        border-color: #e879f9;
         background: rgba(255, 255, 255, 0.05);
     }
     
     /* Relations specific */
     .relation-item {
-        background: linear-gradient(90deg, rgba(124, 58, 237, 0.1), rgba(37, 99, 235, 0.05));
-        border: 1px solid rgba(124, 58, 237, 0.2);
+        background: linear-gradient(90deg, rgba(192, 132, 252, 0.1), rgba(34, 211, 238, 0.05));
+        border: 1px solid rgba(192, 132, 252, 0.2);
         padding: 0.75rem 1rem;
         border-radius: 8px;
         margin-bottom: 0.5rem;
@@ -147,7 +147,7 @@ def display_text_as_bullets(text, emoji="🔹"):
             
             st.markdown(f"""
             <div class="styled-bullet">
-                <span style="color: #a855f7; font-size: 1.2em; margin-right: 10px;">{emoji}</span>
+                <span style="color: #e879f9; font-size: 1.2em; margin-right: 10px;">{emoji}</span>
                 <span style="font-size: 1.05em; color: #d1d5db;">{line}</span>
             </div>
             """, unsafe_allow_html=True)
@@ -166,7 +166,7 @@ def display_relations(text):
                 y_col = parts[1].split(":")[1].strip()
                 plot_type = parts[2].split(":")[1].strip()
                 
-                display_text = f"<span style='color: #e0e0e0; font-weight: 600;'>{x_col}</span> <span style='color: #6b7280; margin: 0 5px;'>vs</span> <span style='color: #e0e0e0; font-weight: 600;'>{y_col}</span> <span style='color: #a855f7; font-size: 0.85em; margin-left: 10px; background: rgba(168, 85, 247, 0.1); padding: 2px 8px; border-radius: 12px;'>{plot_type}</span>"
+                display_text = f"<span style='color: #e0e0e0; font-weight: 600;'>{x_col}</span> <span style='color: #6b7280; margin: 0 5px;'>vs</span> <span style='color: #e0e0e0; font-weight: 600;'>{y_col}</span> <span style='color: #e879f9; font-size: 0.85em; margin-left: 10px; background: rgba(232, 121, 249, 0.1); padding: 2px 8px; border-radius: 12px;'>{plot_type}</span>"
                 
                 st.markdown(f"""
                 <div class="relation-item">
@@ -250,7 +250,7 @@ def main():
         """, unsafe_allow_html=True)
 
     # Main Content
-    st.title("Agentic Data Analyst")
+    st.title("Multi Agent Data Analysis with Crew AI")
     st.markdown("### Data Analysis as a Service")
     
     # File Upload
