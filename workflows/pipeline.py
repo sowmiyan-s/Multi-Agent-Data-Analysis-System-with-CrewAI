@@ -23,13 +23,13 @@ validate_task = Task(
 
 relation_task = Task(
     agent=relation_agent,
-    description="Read 'data/cleaned_csv.csv' and identify visualization relationships using ACTUAL column names. Return a simple bulleted list. DO NOT use JSON.",
-    expected_output="Plain text bulleted list of relationships. Example:\n- Age vs Income (Scatter Plot)\n- City vs Sales (Bar Chart)"
+    description="Identify 5 key relationships for visualization from 'data/cleaned_csv.csv'. You MUST use the strict format: 'X: [col] | Y: [col] | Type: [plot]'. Use ACTUAL column names only.",
+    expected_output="Strictly formatted list. Example:\n- X: Age | Y: Salary | Type: Scatter Plot\n- X: City | Y: Sales | Type: Bar Chart"
 )
 
 insight_task = Task(
     agent=insights_agent,
-    description="Synthesize the findings into 5 key business insights. Return a simple numbered list. DO NOT use JSON.",
+    description="Produce 5 key business insights by synthesizing the findings. Return a simple numbered list. DO NOT use JSON.",
     expected_output="Plain text numbered list of 5 insights. Example:\n1. Sales are increasing...\n2. Customer retention is high..."
 )
 

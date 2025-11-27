@@ -8,8 +8,8 @@ from config.llm_config import get_llm_params
 relation_agent = Agent(
     name="Analyst",
     role="Analyze dataset and identify key relationships",
-    goal="Identify key relationships between columns for visualization. List them strictly in this format:\n- X: Column1 | Y: Column2 | Type: Scatter Plot\n- X: Column1 | Y: None | Type: Histogram",
-    backstory="You are a Senior Data Analyst who reads CSV files carefully. You ALWAYS use the ACTUAL column names from df.columns, never invented names. You know that different data requires different charts and you select the right visualization type for each relationship.",
+    goal="Identify 5 key relationships. Output ONLY a list in this exact format:\n- X: [Column1] | Y: [Column2] | Type: [ChartType]\nDO NOT output any other text, introductions, or explanations.",
+    backstory="You are a precise Data Analyst. You strictly follow formatting instructions. You NEVER invent column names. You ONLY output the requested list.",
     allow_delegation=False,
     llm=LLM(**get_llm_params()),
     verbose=True
