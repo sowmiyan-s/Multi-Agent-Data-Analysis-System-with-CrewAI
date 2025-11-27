@@ -187,7 +187,7 @@ def display_relations(text):
 def main():
     # Sidebar
     with st.sidebar:
-        st.markdown("## ⚙️ Configuration")
+        st.markdown("## Configuration")
         
         st.markdown("### LLM Settings")
         provider = st.selectbox(

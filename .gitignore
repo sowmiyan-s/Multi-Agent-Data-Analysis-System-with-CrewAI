@@ -1,4 +1,37 @@
-/.env
-/.replit
-/replit.md
-/outputs    
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Environment Variables
+.env
+.env.local
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Project Outputs
+outputs/
+data/cleaned_csv.csv
+# If you want to ignore all uploaded data:
+# data/*
+# !data/.gitkeep
+
+# IDEs
+.vscode/
+.idea/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Replit
+.replit
+replit.md
