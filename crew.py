@@ -1,151 +1,124 @@
-import logging
-import sys
 import os
-from pathlib import Path
 import pandas as pd
-import webbrowser
-from dotenv import load_dotenv
+from pathlib import Path
+from typing import Dict, Any, Optional, List
+from crewai import Crew, Task
+from utils.logger import app_logger
+from config.app_config import settings
+from config.llm_config import get_llm_params
 
-# Import CrewAI components
-try:
-    from crewai import Crew, Task, Agent
-except ImportError as e:
-    print(f"ERROR: {e}\nRun: pip install crewai")
-    sys.exit(1)
-
-# Import local components
+# Import local agents
 from agents.cleaner import get_cleaner_agent
 from agents.validator import get_validator_agent
-from agents.relation import get_relation_agent
 from agents.insights import get_insights_agent
+from agents.viz_expert import get_viz_expert_agent
 
-load_dotenv()
+class AnalysisResult:
+    def __init__(self, status: str, data: Optional[pd.DataFrame] = None, reports: Dict[str, Any] = None, error: Optional[str] = None):
+        self.status = status
+        self.data = data
+        self.reports = reports or {}
+        self.error = error
 
-# Disable CrewAI Telemetry to prevent timeouts
-os.environ["CREWAI_TELEMETRY_OPT_OUT"] = "true"
-os.environ["OTEL_SDK_DISABLED"] = "true"
+def run_analysis_pipeline(csv_path: str, task_callback=None) -> AnalysisResult:
+    """
+    Main entry point for the agentic analysis pipeline.
+    """
+    app_logger.info(f"Starting analysis pipeline for: {csv_path}")
+    
+    # Pre-flight check: Validate API Key
+    llm_params = get_llm_params()
+    api_key = llm_params.get("api_key", "")
+    is_placeholder = any(x in api_key.lower() for x in ["sk-...", "your_", "key_here", "dummy"])
+    
+    if (not api_key or is_placeholder) and "ollama" not in llm_params.get("model", ""):
+        error_msg = f"Valid API Key missing for provider: {os.getenv('LLM_PROVIDER', settings.DEFAULT_PROVIDER)}. Please set it in the sidebar."
+        app_logger.error(error_msg)
+        return AnalysisResult(status="error", error=error_msg)
 
-logging.getLogger("urllib3").setLevel(logging.ERROR)
-logging.getLogger("opentelemetry").setLevel(logging.ERROR)
-
-def perform_initial_cleaning(csv_path: str) -> tuple[pd.DataFrame, Path]:
-    """Performs initial data cleaning and returns the cleaned dataframe and its path."""
     try:
         df = pd.read_csv(csv_path)
     except Exception as e:
-        raise FileNotFoundError(f"Error reading CSV: {e}")
-
-    # Basic cleaning
-    df = df.drop_duplicates()
-    
-    # Fill numeric missing values with mean
-    numeric_cols = df.select_dtypes(include=['number']).columns
-    df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
-    
-    # Fill categorical missing values with mode
-    categorical_cols = df.select_dtypes(include=['object']).columns
-    for col in categorical_cols:
-        if df[col].isnull().any():
-            mode_val = df[col].mode()
-            if not mode_val.empty:
-                df[col] = df[col].fillna(mode_val[0])
-            else:
-                df[col] = df[col].fillna("Unknown")
-
-    data_dir = Path("data")
-    data_dir.mkdir(exist_ok=True)
-    cleaned_file_path = data_dir / "cleaned_csv.csv"
-    df.to_csv(cleaned_file_path, index=False)
-    
-    return df, cleaned_file_path
-
-def run_crew(csv_path: str, task_callback=None):
-    output_dir = Path("outputs")
-    output_dir.mkdir(exist_ok=True)
-    
-    # Cleanup existing visualizations
-    for existing_file in output_dir.glob("*.png"):
-        existing_file.unlink()
-    
-    try:
-        df, cleaned_file_path = perform_initial_cleaning(csv_path)
-    except Exception as e:
-        print(f"Initial cleaning failed: {e}")
-        return None
-
-    # Update dataset path for agents
-    os.environ["CURRENT_DATASET_PATH"] = str(cleaned_file_path.absolute())
+        app_logger.error(f"Failed to read CSV: {e}")
+        return AnalysisResult(status="error", error=f"Read Error: {str(e)}")
 
     # Initialize Agents
+    app_logger.debug("Initializing agents...")
     cleaner = get_cleaner_agent()
     validator = get_validator_agent()
-    relation = get_relation_agent()
-    insights = get_insights_agent()
+    viz_expert = get_viz_expert_agent()
+    strategist = get_insights_agent()
 
-    # Define Tasks with callbacks
-    def _create_callback(name):
-        if task_callback:
-            return lambda output: task_callback(name, output)
-        return None
-
+    # Define Tasks
+    app_logger.debug("Defining tasks...")
+    
     clean_task = Task(
+        description=f"Analyze the dataset at {csv_path} and identify data quality issues. Suggest specific cleaning steps.",
+        expected_output="A detailed data quality report with recommended cleaning actions.",
         agent=cleaner,
-        description="Clean the dataset (data/cleaned_csv.csv). Return a simple bulleted list of the steps you took. DO NOT use JSON. DO NOT use code blocks.",
-        expected_output="A plain text bulleted list of cleaning steps.",
-        callback=_create_callback('clean')
+        callback=lambda x: task_callback('clean', x) if task_callback else None
     )
 
     validate_task = Task(
+        description="Verify if the dataset is statistically sound and suitable for business intelligence analysis.",
+        expected_output="A validation report with a GO/NO-GO decision.",
         agent=validator,
-        description="Validate the dataset (data/cleaned_csv.csv). Return a simple YES/NO decision and a reason. DO NOT use JSON.",
-        expected_output="Plain text decision and reason.",
-        callback=_create_callback('validate')
+        context=[clean_task],
+        callback=lambda x: task_callback('validate', x) if task_callback else None
     )
 
-    relation_task = Task(
-        agent=relation,
-        description="Identify 5 key relationships for visualization from 'data/cleaned_csv.csv'. You MUST use the strict format: 'X: [col] | Y: [col] | Type: [plot]'. Use ACTUAL column names only.",
-        expected_output="Strictly formatted list.",
-        callback=_create_callback('relation')
+    viz_task = Task(
+        description="Design 5 interactive visualizations that reveal the most important trends in the data. Provide them as a JSON array.",
+        expected_output="A JSON array of 5 objects containing 'title', 'x', 'y', 'type', and 'reason'.",
+        agent=viz_expert,
+        context=[validate_task],
+        callback=lambda x: task_callback('relation', x) if task_callback else None
     )
 
     insight_task = Task(
-        agent=insights,
-        description="Produce 5 key business insights by synthesizing the findings. Return a simple numbered list. DO NOT use JSON.",
-        expected_output="Plain text numbered list of 5 insights.",
-        callback=_create_callback('insights')
+        description="Synthesize all findings into 5 actionable strategic business insights.",
+        expected_output="5 high-level business insights with supporting evidence from the data.",
+        agent=strategist,
+        context=[clean_task, validate_task, viz_task],
+        callback=lambda x: task_callback('insights', x) if task_callback else None
     )
 
+    # Assemble Crew
     crew = Crew(
-        agents=[cleaner, validator, relation, insights],
-        tasks=[clean_task, validate_task, relation_task, insight_task],
+        agents=[cleaner, validator, viz_expert, strategist],
+        tasks=[clean_task, validate_task, viz_task, insight_task],
         verbose=True,
-        max_rpm=20, # Increased for better performance while still protecting against bans
-        planning=False
+        process="sequential"
     )
 
     try:
+        app_logger.info("Kicking off crew execution...")
         result = crew.kickoff()
+        
+        return AnalysisResult(
+            status="complete",
+            data=df,
+            reports={
+                "final_raw": str(result),
+                "tasks": {
+                    "clean": clean_task.output.raw if clean_task.output else None,
+                    "validate": validate_task.output.raw if validate_task.output else None,
+                    "viz": viz_task.output.raw if viz_task.output else None,
+                    "insights": insight_task.output.raw if insight_task.output else None
+                }
+            }
+        )
     except Exception as e:
-        print(f"Error during crew execution: {e}")
-        return {
-            'dataframe': df,
-            'status': 'error',
-            'error': str(e)
-        }
-    
-    return {
-        'dataframe': df,
-        'status': 'complete',
-        'final_result': str(result.raw if hasattr(result, 'raw') else result)
-    }
+        app_logger.error(f"Crew execution failed: {e}")
+        return AnalysisResult(status="error", error=str(e))
 
 if __name__ == "__main__":
-    default_path = (Path.cwd() / "data" / "TB_Burden_Country.csv").resolve()
-    a = input(f"Enter the path to your CSV file (default: {default_path.name}): ") or str(default_path)
-    report = run_crew(a)
-    if report:
-        print("\nAnalysis Complete.")
-        print("Multi Agent Data Analysis with Crew AI")
-        print("Optimized by Antigravity")
+    # CLI mode for testing
+    import sys
+    if len(sys.argv) > 1:
+        res = run_analysis_pipeline(sys.argv[1])
+        print(f"Status: {res.status}")
+        if res.error: print(f"Error: {res.error}")
+    else:
+        print("Usage: python crew.py <path_to_csv>")
 

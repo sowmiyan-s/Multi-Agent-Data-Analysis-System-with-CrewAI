@@ -1,7 +1,3 @@
-# Multi Agent Data Analysis with Crew AI
-# Copyright (c) 2025 Sowmiyan S
-# Licensed under the MIT License
-
 from crewai import Agent, LLM
 from config.llm_config import get_llm_params
 from tools.dataset_tools import DatasetTools
@@ -9,22 +5,16 @@ from tools.dataset_tools import DatasetTools
 def get_insights_agent():
     return Agent(
         name="Business Strategist",
-        role="Provide business insights",
-        backstory="An expert consultant who transforms raw data into actionable business strategy. You look beyond the numbers to find the 'so what' and 'now what' of any dataset.",
-        goal="""Synthesize all findings into 5 powerful, actionable business insights. 
-        Each insight should be grounded in the data patterns found by the other agents.
-        Focus on trends, anomalies, and opportunities for improvement.
-        Return a numbered list of insights. Be professional and strategic.""",
+        role="Principal Business Intelligence Consultant",
+        backstory="""You have spent decades advising Fortune 500 CEOs. 
+        You can see patterns in data that others miss. 
+        You excel at translating technical metrics into strategic business value.""",
+        goal="""Synthesize findings from the data audit, validation, and visualizations. 
+        Deliver 5 high-impact business insights that can drive revenue or efficiency improvements.""",
         llm=LLM(**get_llm_params()),
         tools=[
-            DatasetTools.read_dataset_head, 
-            DatasetTools.get_dataset_info, 
-            DatasetTools.get_statistical_summary,
-            DatasetTools.get_correlation_matrix
+            DatasetTools.statistical_profiling, 
+            DatasetTools.inspect_dataset
         ],
         verbose=True
     )
-
-# Multi Agent Data Analysis with Crew AI
-# Copyright (c) 2025 Sowmiyan S
-# Licensed under the MIT License

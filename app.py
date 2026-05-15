@@ -1,397 +1,210 @@
 import streamlit as st
 import pandas as pd
 import os
-from pathlib import Path
-import sys
-import contextlib
-import html
 import json
 import re
-import glob
-from PIL import Image
-import numpy as np
+from pathlib import Path
+from utils.logger import app_logger
+from config.app_config import settings
+from crew import run_analysis_pipeline
+from components.sidebar import render_sidebar
 import plotly.express as px
-import plotly.graph_objects as go
 
-from crew import run_crew
-
-# Disable CrewAI Telemetry
-os.environ["CREWAI_TELEMETRY_OPT_OUT"] = "true"
-os.environ["OTEL_SDK_DISABLED"] = "true"
-
-# Set page config
-st.set_page_config(
-    page_title="Agentic Data Analyst | Premium BI",
-    page_icon="💎",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# Custom CSS for Premium Design
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-    
-    :root {
-        --primary: #8b5cf6;
-        --secondary: #06b6d4;
-        --bg-dark: #0f172a;
-        --card-bg: #1e293b;
-        --text-main: #f8fafc;
-        --text-dim: #94a3b8;
-    }
-
-    .stApp {
-        background: radial-gradient(circle at top right, #1e1b4b, #0f172a);
-        color: var(--text-main);
-        font-family: 'Inter', sans-serif;
-    }
-
-    /* Glassmorphism Cards */
-    .glass-card {
-        background: rgba(30, 41, 59, 0.7);
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    }
-
-    /* Headers */
-    h1, h2, h3 {
-        font-family: 'Inter', sans-serif;
-        letter-spacing: -0.025em;
-    }
-
-    .main-title {
-        font-size: 3.5rem;
-        font-weight: 800;
-        background: linear-gradient(to right, #a78bfa, #22d3ee);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 0.5rem;
-    }
-
-    /* Custom Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: rgba(15, 23, 42, 0.95);
-        border-right: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    /* Buttons */
-    .stButton>button {
-        width: 100%;
-        background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-        color: white;
-        border: none;
-        padding: 0.75rem 1.5rem;
-        border-radius: 12px;
-        font-weight: 600;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        text-transform: none;
-        letter-spacing: 0.025em;
-    }
-
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgba(139, 92, 246, 0.3);
-        background: linear-gradient(135deg, #a78bfa 0%, #818cf8 100%);
-    }
-
-    /* Status Indicator */
-    .status-badge {
-        display: inline-block;
-        padding: 0.25rem 0.75rem;
-        border-radius: 9999px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        margin-bottom: 1rem;
-    }
-
-    .status-active { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
-
-    /* Insight Cards */
-    .insight-card {
-        border-left: 4px solid #8b5cf6;
-        background: rgba(139, 92, 246, 0.05);
-        padding: 1rem;
-        border-radius: 0 12px 12px 0;
-        margin-bottom: 1rem;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-def parse_relations(text):
-    """Parses relations from the agent's output."""
-    relations = []
-    lines = text.split('\n')
-    for line in lines:
-        # Match pattern: X: [col] | Y: [col] | Type: [plot]
-        match = re.search(r"X:\s*(.*?)\s*\|\s*Y:\s*(.*?)\s*\|\s*Type:\s*(.*)", line)
-        if match:
-            relations.append({
-                'x': match.group(1).strip(),
-                'y': match.group(2).strip(),
-                'type': match.group(3).strip()
-            })
-    return relations
-
-def render_dynamic_visualizations(df, relations):
-    """Renders visualizations based on agent suggestions."""
-    if not relations:
-        st.info("The Relationship Mapper didn't suggest specific plots, using default analysis.")
-        return False
-
-    cols = st.columns(2)
-    for i, rel in enumerate(relations):
-        with cols[i % 2]:
-            st.markdown(f"#### Sugggestion {i+1}: {rel['x']} vs {rel['y']}")
-            try:
-                plot_type = rel['type'].lower()
-                fig = None
-                
-                if 'scatter' in plot_type:
-                    fig = px.scatter(df, x=rel['x'], y=rel['y'], color_discrete_sequence=['#8b5cf6'], template="plotly_dark")
-                elif 'bar' in plot_type:
-                    fig = px.bar(df, x=rel['x'], y=rel['y'], color_discrete_sequence=['#06b6d4'], template="plotly_dark")
-                elif 'line' in plot_type:
-                    fig = px.line(df, x=rel['x'], y=rel['y'], color_discrete_sequence=['#f59e0b'], template="plotly_dark")
-                elif 'box' in plot_type:
-                    fig = px.box(df, x=rel['x'], y=rel['y'], color_discrete_sequence=['#ec4899'], template="plotly_dark")
-                
-                if fig:
+def render_visualizations(df, viz_specs_raw):
+    """Parses JSON viz specs and renders them using Plotly."""
+    try:
+        # Clean the raw string (sometimes agents wrap JSON in markdown blocks)
+        clean_json = re.sub(r"```json\n?|\n?```", "", str(viz_specs_raw)).strip()
+        specs = json.loads(clean_json)
+        
+        cols = st.columns(2)
+        for i, spec in enumerate(specs):
+            with cols[i % 2]:
+                st.markdown(f"#### {spec.get('title', 'Untitled Visualization')}")
+                try:
+                    v_type = spec.get('type', 'bar').lower()
+                    x, y = spec.get('x'), spec.get('y')
+                    
+                    if v_type == 'scatter':
+                        fig = px.scatter(df, x=x, y=y, template="plotly_dark", color_discrete_sequence=['#6366f1'])
+                    elif v_type == 'line':
+                        fig = px.line(df, x=x, y=y, template="plotly_dark", color_discrete_sequence=['#22d3ee'])
+                    elif v_type == 'bar':
+                        fig = px.bar(df, x=x, y=y, template="plotly_dark", color_discrete_sequence=['#8b5cf6'])
+                    elif v_type == 'box':
+                        fig = px.box(df, x=x, y=y, template="plotly_dark", color_discrete_sequence=['#f43f5e'])
+                    elif v_type == 'histogram':
+                        fig = px.histogram(df, x=x, template="plotly_dark", color_discrete_sequence=['#fbbf24'])
+                    elif v_type == 'pie':
+                        fig = px.pie(df, names=x, values=y, template="plotly_dark")
+                    else:
+                        st.warning(f"Unsupported chart type: {v_type}")
+                        continue
+                    
                     fig.update_layout(
                         paper_bgcolor='rgba(0,0,0,0)',
                         plot_bgcolor='rgba(0,0,0,0)',
-                        margin=dict(l=20, r=20, t=40, b=20)
+                        margin=dict(l=0, r=0, t=30, b=0),
+                        height=400
                     )
                     st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.warning(f"Unsupported plot type: {rel['type']}")
-            except Exception as e:
-                st.error(f"Error plotting {rel['x']} vs {rel['y']}: {e}")
-    return True
+                    st.caption(spec.get('reason', ''))
+                except Exception as ve:
+                    st.error(f"Failed to render chart: {ve}")
+    except Exception as e:
+        st.error(f"Could not parse visualization specs: {e}")
+        st.code(viz_specs_raw)
 
-import io
+# Set page config
+st.set_page_config(
+    page_title=f"{settings.APP_NAME} | Enterprise BI",
+    page_icon="💎",
+    layout="wide"
+)
 
-# Ensure UTF-8 encoding for terminal output to prevent UnicodeEncodeErrors
-if sys.platform == "win32":
-    try:
-        sys.stdout.reconfigure(encoding='utf-8')
-        sys.stderr.reconfigure(encoding='utf-8')
-    except Exception:
-        # Fallback if Streamlit's wrapped stdout doesn't support reconfigure
-        pass
+# Load custom CSS
+def local_css(file_name):
+    with open(file_name) as f:
+        st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+
+try:
+    local_css("assets/style.css")
+except Exception as e:
+    st.error(f"Error loading CSS: {e}")
 
 def main():
-    # Sidebar
-    with st.sidebar:
-        st.markdown("<h2 style='color: #a78bfa;'>💎 Configuration</h2>", unsafe_allow_html=True)
-        
-        provider = st.selectbox("LLM Provider", ["nvidia", "groq", "openai", "gemini", "anthropic"], index=0)
-        
-        model_map = {
-            "nvidia": ["nvidia_nim/mistralai/mistral-medium-3.5-128b", "nvidia_nim/mistralai/mistral-large-2407"],
-            "groq": ["groq/llama-3.3-70b-versatile", "groq/llama-3.1-8b-instant"],
-            "openai": ["gpt-4o", "gpt-4o-mini"],
-            "gemini": ["gemini/gemini-1.5-pro", "gemini/gemini-1.5-flash"],
-            "anthropic": ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"]
-        }
-        
-        selected_model = st.selectbox("Model Selection", model_map[provider])
-        
-        # Respect existing environment variables
-        env_key_name = f"{provider.upper()}_API_KEY"
-        existing_key = os.getenv(env_key_name, "")
-        
-        api_key = st.text_input(f"{provider.upper()} API Key", value=existing_key, type="password")
-        
-        if api_key:
-            os.environ[env_key_name] = api_key.strip()
-        
-        os.environ["LLM_PROVIDER"] = provider
-        os.environ["LLM_MODEL"] = selected_model
+    # Render Sidebar
+    render_sidebar()
 
-        st.markdown("---")
-        st.markdown("""
-            <div style='font-size: 0.8rem; color: #94a3b8;'>
-                <b>Agentic Data Analyst v2.0</b><br>
-                Powered by CrewAI & Plotly
-            </div>
-        """, unsafe_allow_html=True)
-
-    # Main Header
-    st.markdown("<h1 class='main-title'>Agentic Data Analyst</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #94a3b8; font-size: 1.2rem; margin-bottom: 2rem;'>The next generation of autonomous business intelligence.</p>", unsafe_allow_html=True)
+    # Hero Section
+    st.markdown("<h1 class='main-title'>Agentic Data Intelligence</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='color: var(--text-dim); font-size: 1.2rem; margin-bottom: 2rem;'>Autonomous data analysis powered by multi-agent reasoning.</p>", unsafe_allow_html=True)
 
     # File Upload
-    uploaded_file = st.file_uploader("Drop your CSV here", type=['csv'])
+    with st.container():
+        uploaded_file = st.file_uploader("Upload your enterprise dataset (CSV/XLSX)", type=['csv', 'xlsx'])
 
     if uploaded_file:
-        file_path = Path("data") / uploaded_file.name
-        file_path.parent.mkdir(exist_ok=True)
+        file_path = Path(settings.DATA_DIR) / uploaded_file.name
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
-        session_key = f"analysis_{uploaded_file.name}"
+        session_id = f"session_{uploaded_file.name}"
         
-        # Ensure session state has all required keys (handles stale state)
-        if session_key not in st.session_state or not isinstance(st.session_state[session_key], dict) or 'relation' not in st.session_state[session_key]:
-            st.session_state[session_key] = {
-                'clean': None,
-                'validate': None,
-                'relation': None,
-                'insights': None,
-                'dataframe': pd.read_csv(file_path),
-                'status': 'idle'
+        if session_id not in st.session_state:
+            st.session_state[session_id] = {
+                'status': 'idle',
+                'results': None,
+                'logs': [],
+                'agent_updates': {}
             }
 
-        # Tabs for real-time results
-        tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard", "🔍 Data Explorer", "🧹 Cleaning Report", "💡 Strategic Insights"])
+        state = st.session_state[session_id]
+
+        # Workspace Tabs
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📊 Executive Dashboard", 
+            "🔍 Data Explorer", 
+            "🛡️ Quality & Validation", 
+            "🧠 Agent Intelligence"
+        ])
 
         with tab2:
-            st.markdown("### 🔍 Dataset Explorer")
-            st.dataframe(st.session_state[session_key]['dataframe'].head(100), use_container_width=True)
-            st.markdown("#### Statistical Overview")
-            st.write(st.session_state[session_key]['dataframe'].describe())
-
-        # Placeholder containers
-        dash_container = tab1.empty()
-        clean_container = tab3.empty()
-        insight_container = tab4.empty()
-
-        # Update displays from session state
-        def update_displays():
-            data = st.session_state[session_key]
-            df = data.get('dataframe')
-
-            # Error Display
-            if data.get('status') == 'error':
-                st.error(f"⚠️ Analysis Error: {data.get('error')}")
-                if st.button("🔄 Reset & Retry"):
-                    st.session_state[session_key]['status'] = 'idle'
-                    st.session_state[session_key]['error'] = None
-                    st.rerun()
-
-            # Pipeline Status (Dynamic Placeholders)
-            st.markdown("### 🛠 Pipeline Status")
-            status_cols = st.columns(4)
-            status_placeholders = [col.empty() for col in status_cols]
+            df = pd.read_csv(file_path) if file_path.suffix == '.csv' else pd.read_excel(file_path)
+            st.markdown("### 🔍 Dataset Preview")
+            st.dataframe(df.head(100), use_container_width=True)
             
-            steps = [
-                ('clean', '🧹 Cleaning'),
-                ('validate', '✅ Validation'),
-                ('relation', '📊 Relations'),
-                ('insights', '💡 Insights')
-            ]
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Total Rows", len(df))
+            c2.metric("Columns", len(df.columns))
+            c3.metric("Missing Values", df.isnull().sum().sum())
 
-            def draw_pipeline():
-                for i, (key, label) in enumerate(steps):
-                    has_data = st.session_state[session_key].get(key)
-                    status_color = "#4ade80" if has_data else "#94a3b8"
-                    status_placeholders[i].markdown(f"""
-                        <div style='text-align: center; padding: 10px; border-radius: 10px; border: 1px solid {status_color}; color: {status_color}; background: rgba(255,255,255,0.02);'>
-                            {label}<br>{'✅' if has_data else '⏳'}
-                        </div>
-                    """, unsafe_allow_html=True)
-
-            draw_pipeline()
-
-            # Dashboard
-            with dash_container.container():
-                if data.get('relation'):
-                    st.markdown("### 📈 Visual Intelligence")
-                    rel_data = data.get('relation')
-                    relations = parse_relations(rel_data.raw if hasattr(rel_data, 'raw') else str(rel_data))
-                    render_dynamic_visualizations(df, relations)
+        with tab1:
+            if state['status'] == 'idle':
+                if st.button("🚀 Execute Autonomous Analysis", use_container_width=True):
+                    state['status'] = 'running'
+                    st.rerun()
+            
+            elif state['status'] == 'running':
+                with st.status("🤖 Orchestrating AI Agents...", expanded=True) as status_box:
+                    def on_task_complete(task_name, output):
+                        state['agent_updates'][task_name] = output
+                        st.toast(f"✅ {task_name.capitalize()} Agent Finished!", icon="🤖")
                     
-                    st.markdown("---")
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        csv = df.to_csv(index=False).encode('utf-8')
-                        st.download_button("📥 Download Cleaned Dataset", data=csv, file_name="cleaned_data.csv", mime="text/csv")
-                    with c2:
-                        report_text = f"ANALYSIS REPORT\n\nCleaning:\n{data.get('clean')}\n\nValidation:\n{data.get('validate')}\n\nInsights:\n{data.get('insights')}"
-                        st.download_button("📄 Download Analysis Report", data=report_text, file_name="analysis_report.txt", mime="text/plain")
-                elif data.get('status') == 'running':
-                    st.info("⌛ Waiting for Relationship Mapper agent...")
-
-            # Cleaning
-            with clean_container.container():
-                if data.get('clean'):
-                    st.markdown("### 🧹 Data Cleaning Report")
-                    clean_data = data.get('clean')
-                    st.markdown(f"<div class='glass-card'>{clean_data.raw if hasattr(clean_data, 'raw') else str(clean_data)}</div>", unsafe_allow_html=True)
-                
-                if data.get('validate'):
-                    st.markdown("#### ✅ Validation Decision")
-                    val_data = data.get('validate')
-                    val = val_data.raw if hasattr(val_data, 'raw') else str(val_data)
-                    color = "#4ade80" if "YES" in val.upper() else "#f87171"
-                    st.markdown(f"<div style='border-left: 4px solid {color}; padding: 1.5rem; background: rgba(255,255,255,0.05); border-radius: 8px;'>{val}</div>", unsafe_allow_html=True)
-
-            # Insights
-            with insight_container.container():
-                if data.get('insights'):
-                    st.markdown("### 💡 Strategic Business Insights")
-                    insights_data = data.get('insights')
-                    insights_text = insights_data.raw if hasattr(insights_data, 'raw') else str(insights_data)
-                    for insight in insights_text.split('\n'):
-                        if insight.strip():
-                            st.markdown(f"<div class='insight-card'>{insight}</div>", unsafe_allow_html=True)
-                elif data.get('status') == 'running':
-                    st.info("⌛ Business Strategist is synthesizing insights...")
-
-            return draw_pipeline # Return the function to use in callbacks
-
-        draw_pipeline_fn = update_displays()
-
-        if st.session_state[session_key]['status'] == 'idle':
-            if st.button("🚀 Start Autonomous Analysis", use_container_width=True):
-                st.session_state[session_key]['status'] = 'running'
-                st.rerun()
-        
-        elif st.session_state[session_key]['status'] == 'running':
-            # Background execution
-            def task_callback(task_name, output):
-                st.session_state[session_key][task_name] = output
-                # Live update the pipeline status during the callback
-                draw_pipeline_fn()
-
-            with st.status("🤖 AI Agents at work...", expanded=True) as status:
-                log_container = st.empty()
-                logs = []
-                class Logger:
-                    def write(self, m):
-                        if m.strip():
-                            logs.append(html.escape(m))
-                            log_container.markdown(f"<div style='height: 150px; overflow-y: auto; background: #000; color: #0f0; padding: 10px; font-family: monospace; font-size: 0.7rem;'>{'$ ' + '<br>$ '.join(logs[-5:])}</div>", unsafe_allow_html=True)
-                    def flush(self): pass
-
-                with contextlib.redirect_stdout(Logger()):
                     try:
-                        result = run_crew(str(file_path), task_callback=task_callback)
-                        if result and result.get('status') == 'complete':
-                            st.session_state[session_key]['status'] = 'complete'
-                            status.update(label="✅ All Agents Finished!", state="complete", expanded=False)
+                        result = run_analysis_pipeline(str(file_path), task_callback=on_task_complete)
+                        if result.status == 'complete':
+                            state['status'] = 'complete'
+                            state['results'] = result
+                            status_box.update(label="✅ Analysis Complete", state="complete")
                         else:
-                            st.session_state[session_key]['status'] = 'error'
-                            st.session_state[session_key]['error'] = result.get('error', 'Unknown error')
-                            status.update(label="❌ Analysis Failed", state="error")
+                            state['status'] = 'error'
+                            state['error'] = result.error
+                            status_box.update(label="❌ Analysis Failed", state="error")
                         st.rerun()
                     except Exception as e:
-                        st.session_state[session_key]['status'] = 'error'
-                        st.session_state[session_key]['error'] = str(e)
-                        st.error(f"Analysis failed: {e}")
-                        status.update(label="❌ Analysis Failed", state="error")
+                        app_logger.exception("App-level crash during analysis")
+                        state['status'] = 'error'
+                        state['error'] = str(e)
                         st.rerun()
 
-    if st.sidebar.button("🗑 Clear All Session History"):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
+            elif state['status'] == 'error':
+                st.error(f"⚠️ Analysis Failed: {state.get('error', 'Unknown Error')}")
+                if st.button("🔄 Reset & Retry", use_container_width=True):
+                    state['status'] = 'idle'
+                    state['error'] = None
+                    st.rerun()
+
+            elif state['status'] == 'complete':
+                res = state['results']
+                st.success("Analysis Complete!")
+                
+                # Render Insights
+                st.markdown("### 💡 Strategic Insights")
+                insights_text = res.reports['tasks'].get('insights', "No insights generated.")
+                st.markdown(f"""
+                    <div class='glass-card' style='border-left: 4px solid var(--accent);'>
+                    
+                    {insights_text}
+                    
+                    </div>
+                """, unsafe_allow_html=True)
+
+                # Visualizations
+                st.markdown("### 📈 Visual intelligence")
+                viz_specs = res.reports['tasks'].get('viz', "[]")
+                render_visualizations(res.data, viz_specs)
+
+        with tab3:
+            if state['status'] == 'complete':
+                res = state['results']
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.markdown("#### 🧹 Quality Audit")
+                    clean_res = res.reports['tasks'].get('clean', "N/A")
+                    st.markdown(f"<div class='glass-card'>\n\n{clean_res}\n\n</div>", unsafe_allow_html=True)
+                with c2:
+                    st.markdown("#### ✅ Statistical Validation")
+                    val_res = res.reports['tasks'].get('validate', "N/A")
+                    st.markdown(f"<div class='glass-card'>\n\n{val_res}\n\n</div>", unsafe_allow_html=True)
+
+        with tab4:
+            st.markdown("### 🧠 Agent Reasoning Logs")
+            if state['agent_updates']:
+                for task, output in state['agent_updates'].items():
+                    with st.expander(f"Agent: {task.capitalize()}"):
+                        st.markdown(output.raw if hasattr(output, 'raw') else str(output))
+            else:
+                st.info("Agent logs will appear here during execution.")
+
+    else:
+        # Empty state
+        st.markdown("""
+            <div style='text-align: center; padding: 5rem; color: var(--text-dim);'>
+                <h3>Ready for your data...</h3>
+                <p>Upload a file to begin the agentic intelligence journey.</p>
+            </div>
+        """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
