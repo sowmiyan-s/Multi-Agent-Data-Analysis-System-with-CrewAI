@@ -52,14 +52,108 @@ from workflows.pipeline import make_pipeline
 
 
 # ---------------------------------------------------------------------------
+# Visualizer Fallback Generator (Pure Python, no LLM)
+# ---------------------------------------------------------------------------
+
+def _run_auto_visualizer_fallback(csv_path: Path, output_dir: Path) -> str:
+    """
+    Pure Python statistical visualizer fallback that runs when the agent fails to save PNGs.
+    Creates structured, premium plots with consistent layout styles.
+    """
+    import pandas as pd
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    try:
+        df = pd.read_csv(csv_path)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+        categorical_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+
+        generated = []
+        sns.set_theme(style="whitegrid", palette="muted")
+        
+        # Color definitions for fallbacks
+        colors = ["#6366f1", "#06b6d4", "#ec4899", "#10b981"]
+
+        # 1. Distribution
+        if numeric_cols:
+            col = numeric_cols[0]
+            plt.figure(figsize=(10, 6))
+            sns.histplot(df[col].dropna(), kde=True, color=colors[0])
+            plt.title(f"Distribution of {col}", fontsize=14, fontweight="bold", pad=15, color="#1e1b4b")
+            plt.xlabel(col)
+            plt.ylabel("Frequency")
+            sns.despine(left=True, bottom=True)
+            plt.tight_layout()
+            dest = output_dir / f"distribution_{col}.png"
+            plt.savefig(dest, dpi=180, bbox_inches="tight")
+            plt.close()
+            generated.append(dest.name)
+
+        # 2. Correlation
+        if len(numeric_cols) >= 2:
+            plt.figure(figsize=(10, 8))
+            corr = df[numeric_cols].corr()
+            sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f", square=True, cbar_kws={"shrink": .8})
+            plt.title("Correlation Matrix", fontsize=14, fontweight="bold", pad=15, color="#1e1b4b")
+            plt.tight_layout()
+            dest = output_dir / "correlation_matrix.png"
+            plt.savefig(dest, dpi=180, bbox_inches="tight")
+            plt.close()
+            generated.append(dest.name)
+
+        # 3. Scatter
+        if len(numeric_cols) >= 2:
+            x, y = numeric_cols[0], numeric_cols[1]
+            plt.figure(figsize=(10, 6))
+            sns.scatterplot(data=df, x=x, y=y, color=colors[1], alpha=0.7)
+            plt.title(f"{x} vs {y} Relationship", fontsize=14, fontweight="bold", pad=15, color="#1e1b4b")
+            sns.despine(left=True, bottom=True)
+            plt.tight_layout()
+            dest = output_dir / f"scatter_{x}_vs_{y}.png"
+            plt.savefig(dest, dpi=180, bbox_inches="tight")
+            plt.close()
+            generated.append(dest.name)
+
+        # 4. Categorical Bar
+        if categorical_cols and numeric_cols:
+            cat, num = categorical_cols[0], numeric_cols[0]
+            # Use top 10 categories to keep the labels readable
+            top_cats = df[cat].value_counts().head(10).index
+            sub_df = df[df[cat].isin(top_cats)]
+            plt.figure(figsize=(10, 6))
+            sns.barplot(data=sub_df, x=cat, y=num, errorbar=None, color=colors[2])
+            plt.title(f"Average {num} by {cat} (Top 10)", fontsize=14, fontweight="bold", pad=15, color="#1e1b4b")
+            plt.xticks(rotation=45, ha="right")
+            sns.despine(left=True, bottom=True)
+            plt.tight_layout()
+            dest = output_dir / f"bar_{cat}_vs_{num}.png"
+            plt.savefig(dest, dpi=180, bbox_inches="tight")
+            plt.close()
+            generated.append(dest.name)
+
+        return f"Generated {len(generated)} auto-healing chart(s) in fallback."
+    except Exception as e:
+        return f"Fallback visualization failed: {e}"
+
+
+# ---------------------------------------------------------------------------
 # Session cleanup helper
 # ---------------------------------------------------------------------------
 
 def _cleanup_old_sessions(max_age_hours: int = 24) -> None:
-    """Remove session directories older than *max_age_hours*."""
+    """Remove session directories older than *max_age_hours*.
+    Also enforces a strict disk quota limit: if the total combined size of sessions and
+    outputs exceeds 1.0 GB, it prunes the oldest folders until the size is under 400 MB.
+    """
     sessions_root = Path("data") / "sessions"
     outputs_root  = Path("outputs")
 
+    # 1. Clean based on age
     for root in (sessions_root, outputs_root):
         if not root.exists():
             continue
@@ -71,6 +165,40 @@ def _cleanup_old_sessions(max_age_hours: int = 24) -> None:
                         shutil.rmtree(session_dir, ignore_errors=True)
                 except OSError:
                     pass
+
+    # 2. Clean based on disk quota (max 1.0 GB combined)
+    def get_dir_size(path: Path) -> int:
+        if not path.exists():
+            return 0
+        return sum(f.stat().st_size for f in path.glob('**/*') if f.is_file())
+
+    total_size = get_dir_size(sessions_root) + get_dir_size(outputs_root)
+    max_quota_bytes = 1000 * 1024 * 1024  # 1.0 GB
+    target_quota_bytes = 400 * 1024 * 1024 # 400 MB
+
+    if total_size > max_quota_bytes:
+        print(f"Disk quota exceeded: {total_size / (1024*1024):.1f}MB. Pruning oldest sessions...")
+        # Collect all session subfolders and outputs with their mtimes
+        subfolders = []
+        for root in (sessions_root, outputs_root):
+            if root.exists():
+                for folder in root.iterdir():
+                    if folder.is_dir():
+                        subfolders.append((folder, folder.stat().st_mtime))
+        
+        # Sort oldest first
+        subfolders.sort(key=lambda x: x[1])
+
+        for folder, _ in subfolders:
+            try:
+                shutil.rmtree(folder, ignore_errors=True)
+                # Recalculate
+                total_size = get_dir_size(sessions_root) + get_dir_size(outputs_root)
+                if total_size <= target_quota_bytes:
+                    print(f"Disk footprint successfully reduced to {total_size / (1024*1024):.1f}MB.")
+                    break
+            except Exception as e:
+                print(f"Error pruning session folder {folder}: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -283,13 +411,23 @@ def run_crew(
         cache=True,
         verbose=True,
     )
+    
+    visualize_output = ""
     try:
         viz_crew.kickoff()
+        visualize_output = _safe_output(viz_task)
     except Exception as exc:
-        print(f"Visualization error: {exc}")
-        raise
+        print(f"Visualization Agent error: {exc}. Activating auto-healing visualizer fallback...")
+        visualize_output = f"Visualization Agent encountered error: {exc}"
 
-    visualize_output = _safe_output(viz_task)
+    # Auto-healing fallback check: if no PNG charts were successfully saved
+    png_files = list(session_output_dir.glob("*.png"))
+    if not png_files:
+        print("No PNG charts generated by agent. Running automatic visualizer fallback...")
+        fallback_msg = _run_auto_visualizer_fallback(cleaned_path, session_output_dir)
+        visualize_output = f"{visualize_output}\n\n[Auto-Healing Fallback Status]: {fallback_msg}"
+        print(fallback_msg)
+
     _progress("visualization", visualize_output)
     print("[Stage 3/3] ✅ Visualization complete.\n")
 

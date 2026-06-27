@@ -87,11 +87,15 @@ def _render_sidebar() -> dict:
         )
         st.session_state["llm_provider"] = provider
 
-        selected_model = st.selectbox(
-            "Select Model",
-            model_options.get(provider, []),
-            index=0,
-        )
+        override_model = st.checkbox("Custom Model Name", value=False, help="Check to manually type a model identifier (e.g. gpt-4o-mini, ollama/my-model)")
+        if override_model:
+            selected_model = st.text_input("Enter Model Identifier", value=st.session_state.get("llm_model") or model_options.get(provider, [""])[0])
+        else:
+            selected_model = st.selectbox(
+                "Select Model",
+                model_options.get(provider, []),
+                index=0,
+            )
         st.session_state["llm_model"] = selected_model
 
         # Pre-fill key from env (initial load only) — stored in session_state
@@ -300,6 +304,50 @@ def _render_results(result: dict) -> None:
             mime="text/csv",
             use_container_width=True,
         )
+
+    # ── Interactive AI Data Copilot Chat ──────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 💬 Interactive AI Data Copilot")
+    st.caption("Ask questions, query columns, or generate new visualizations in real-time.")
+
+    # Initialize chat history
+    if "copilot_messages" not in st.session_state:
+        st.session_state["copilot_messages"] = []
+
+    # Display chat messages
+    for msg in st.session_state["copilot_messages"]:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            if msg.get("plot_path"):
+                st.image(msg["plot_path"])
+
+    # User input
+    if chat_prompt := st.chat_input("Query your cleaned dataset (e.g. 'Show average values by category', 'Plot X vs Y')"):
+        # Display user message
+        with st.chat_message("user"):
+            st.markdown(chat_prompt)
+        st.session_state["copilot_messages"].append({"role": "user", "content": chat_prompt})
+
+        # Generate copilot response
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing data..."):
+                from ui.copilot import run_copilot_query
+                csv_path = f"data/sessions/{st.session_state['session_id']}/cleaned.csv"
+                output_dir = result.get("output_dir", "outputs")
+                
+                res = run_copilot_query(chat_prompt, csv_path, output_dir)
+                
+                # Show text response
+                st.markdown(res["text"])
+                # Show plot if any
+                if res.get("plot_path"):
+                    st.image(res["plot_path"])
+                    
+                st.session_state["copilot_messages"].append({
+                    "role": "assistant",
+                    "content": res["text"],
+                    "plot_path": res.get("plot_path")
+                })
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

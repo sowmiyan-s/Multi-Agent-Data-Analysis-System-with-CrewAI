@@ -50,8 +50,7 @@ def _strip_markdown_fences(code: str) -> str:
 def _run_in_subprocess(script: str, timeout: int = 120) -> tuple[bool, str]:
     """
     Write *script* to a temp file and execute it in an isolated subprocess.
-
-    Returns (success: bool, output: str) where output is stdout+stderr.
+    Includes auto-dependency healing to download missing packages if needed.
     """
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".py", delete=False, encoding="utf-8"
@@ -68,6 +67,31 @@ def _run_in_subprocess(script: str, timeout: int = 120) -> tuple[bool, str]:
         )
         output = (proc.stdout + proc.stderr).strip()
         success = proc.returncode == 0
+
+        # Check for missing imports and auto-heal
+        if not success:
+            match = re.search(r"(?:ModuleNotFoundError|ImportError):\s*No\s+module\s+named\s+['\"]?([a-zA-Z0-9_\-]+)", output)
+            if match:
+                missing_module = match.group(1)
+                print(f"Auto-dependency healing: installing '{missing_module}'...")
+                try:
+                    subprocess.run(
+                        [sys.executable, "-m", "pip", "install", missing_module, "--quiet"],
+                        capture_output=True,
+                        timeout=40,
+                    )
+                    # Retry script execution
+                    proc = subprocess.run(
+                        [sys.executable, tmp_path],
+                        capture_output=True,
+                        text=True,
+                        timeout=timeout,
+                    )
+                    output = (proc.stdout + proc.stderr).strip()
+                    success = proc.returncode == 0
+                except Exception as pip_err:
+                    output = f"Auto-heal failed to install '{missing_module}': {pip_err}\nOriginal Output:\n{output}"
+
         return success, output or "(no output)"
     except subprocess.TimeoutExpired:
         return False, f"Execution timed out after {timeout}s."
