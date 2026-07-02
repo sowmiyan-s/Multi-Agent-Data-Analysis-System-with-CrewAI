@@ -1,4 +1,4 @@
-# Multi Agent Data Analysis with Crew AI
+# Crewlyze
 # Copyright (c) 2025 Sowmiyan S
 # Licensed under the MIT License
 
@@ -125,16 +125,22 @@ def run_copilot_query(query: str, csv_path: str, output_dir_str: str) -> dict:
     1. Read the dataset: df = pd.read_csv(FILE_PATH)
     2. Use ONLY the column names listed in the dataset schema (exact spelling, case-sensitive).
     3. Perform any required analysis, aggregation, computation, or modifications.
-    4. Print a clear, formatted answer to stdout detailing the results or actions taken.
+    4. Print a clear, detailed, and nicely formatted answer to stdout detailing the results or actions taken.
+       - Use rich Markdown formatting (e.g. Markdown tables, bulleted lists, bold text, headers) to structure the output like a professional report.
+       - If the user asks for a table or for N values, print a Markdown table.
     5. If the query asks to modify, clean, fix, rename, delete columns, drop rows, replace missing values, or update values in the dataset:
        - Perform the operation on the DataFrame `df`.
        - Save the modified DataFrame back to the CSV file at the end of the script: `df.to_csv(FILE_PATH, index=False)`.
-       - Print a confirmation message to stdout explaining exactly what dataset modifications were made.
+       - Print a confirmation message to stdout using Markdown (e.g., bulleted list) explaining exactly what dataset modifications were made.
     6. If the query asks for a chart/plot/graph:
-       - Call `import matplotlib; matplotlib.use('Agg')` BEFORE importing pyplot.
-       - Generate a professional chart. Apply any specific styles, colors, layouts, grids, or palettes requested by the user. If they specify custom colors/configurations (e.g. "red-blue line chart" or "neon green theme"), make sure to use those styles/colors in your matplotlib/seaborn code.
-       - Save the chart to: '{plot_path.as_posix()}'
-       - Call `plt.tight_layout()` then `plt.savefig(...)` then `plt.close()`.
+       - You can use either Matplotlib/Seaborn OR Plotly.
+       - If using Matplotlib/Seaborn: Call `import matplotlib; matplotlib.use('Agg')` BEFORE importing pyplot. Save with `plt.savefig('{plot_path.as_posix()}')`.
+       - If using Plotly: Do NOT use `fig.write_image()`. Instead, you MUST export the figure using the Kaleido API directly:
+         ```python
+         import kaleido
+         kaleido.write_fig_sync(fig, '{plot_path.as_posix()}')
+         ```
+       - Generate a professional chart. Apply any specific styles, colors, layouts, grids, or palettes requested by the user.
 
     Return ONLY valid Python code inside a ```python ... ``` block.
     Do NOT include explanations or text outside the code block.

@@ -1,4 +1,4 @@
-# Multi Agent Data Analysis with Crew AI
+# Crewlyze
 # Copyright (c) 2025 Sowmiyan S
 # Licensed under the MIT License
 
@@ -32,6 +32,7 @@ import tempfile
 import subprocess
 
 import pandas as pd
+from typing import Optional
 from crewai.tools import tool
 
 
@@ -76,10 +77,17 @@ def read_csv_robust(file_path: str, **kwargs) -> pd.DataFrame:
 
 def _strip_markdown_fences(code: str) -> str:
     """Remove leading/trailing markdown code fences from LLM output."""
-    code = code.strip()
-    code = re.sub(r"^```(?:python)?\s*\n?", "", code)
-    code = re.sub(r"\n?```\s*$", "", code)
-    return code.strip()
+    # Find any python code blocks: ```python ... ```
+    match = re.search(r"```(?:python)?\s*(.*?)\s*```", code, re.DOTALL | re.IGNORECASE)
+    if match:
+        code = match.group(1)
+    else:
+        code = code.strip()
+        code = re.sub(r"^```(?:python)?\s*\n?", "", code)
+        code = re.sub(r"\n?```\s*$", "", code)
+    
+    import textwrap
+    return textwrap.dedent(code).strip()
 
 
 def _df_to_markdown(df: "pd.DataFrame", index: bool = True) -> str:
@@ -135,7 +143,49 @@ def _df_to_markdown(df: "pd.DataFrame", index: bool = True) -> str:
     return "\n".join(lines)
 
 
-def _run_in_subprocess(script: str, timeout: int = 120) -> tuple[bool, str]:
+def _heal_script_code(script: str, error_output: str) -> str:
+    """Use the configured LLM to self-heal/correct a failing python script."""
+    try:
+        from crewai import LLM
+        from config.llm_config import get_llm_params
+        
+        # Get LLM instance
+        llm = LLM(**get_llm_params())
+        
+        prompt = f"""You are a senior python debugger.
+The following python script failed during execution with an error/traceback.
+
+--- FAIL SCRIPT ---
+{script}
+
+--- ERROR OUTPUT ---
+{error_output}
+
+Task:
+Analyze the error carefully. Identify why it failed (e.g., missing imports, undefined variables, incorrect pandas api calls, type mismatches).
+Rewrite the script to fix this error, ensuring you preserve the original logic and functional goal.
+Do NOT omit the imports, variables, or functions that are set up.
+For visualization scripts, make sure 'save_chart(filename)' is called correctly.
+For data cleaning scripts, make sure 'df.to_csv(FILE_PATH, index=False)' is kept at the end.
+
+Format:
+Return ONLY the corrected, ready-to-run python script inside a markdown python block:
+```python
+# corrected code here
+```
+Do not include any other explanations, intros, or markdown outside the code block.
+"""
+        # Call LLM
+        response = llm.call([{"role": "user", "content": prompt}])
+        corrected_code = _strip_markdown_fences(response)
+        return corrected_code
+    except Exception as e:
+        # If healing fails, return original script
+        print(f"Self-healing error: {e}")
+        return script
+
+
+def _run_in_subprocess(script: str, timeout: int = 120, is_healed_attempt: bool = False) -> tuple[bool, str]:
     """
     Write *script* to a temp file and execute it in an isolated subprocess.
     Includes auto-dependency healing to download missing packages if needed.
@@ -155,6 +205,41 @@ def _run_in_subprocess(script: str, timeout: int = 120) -> tuple[bool, str]:
         )
         output = (proc.stdout + proc.stderr).strip()
         success = proc.returncode == 0
+        
+        # If execution failed and we haven't already tried to self-heal:
+        if not success and not is_healed_attempt:
+            # 1. Package dependency healing (ModuleNotFoundError)
+            match_module = re.search(r"ModuleNotFoundError:\s*No module named\s*['\"]([^'\"]+)['\"]", output)
+            if match_module:
+                module_name = match_module.group(1)
+                print(f"\n[Auto-Healing System] Missing module '{module_name}'. Attempting pip install...\n")
+                sys.stdout.flush()
+                try:
+                    subprocess.run([sys.executable, "-m", "pip", "install", module_name], capture_output=True)
+                    # Retry execution after package install
+                    success_pkg, output_pkg = _run_in_subprocess(script, timeout=timeout, is_healed_attempt=True)
+                    if success_pkg:
+                        print(f"[Auto-Healing System] Installed '{module_name}' and executed successfully!")
+                        sys.stdout.flush()
+                        return True, f"[Auto-Healing system installed missing package '{module_name}']\n\nOutput:\n{output_pkg}"
+                except Exception as pkg_err:
+                    print(f"[Auto-Healing System] Failed to install package: {pkg_err}")
+                    sys.stdout.flush()
+
+            # 2. Logic/Code healing (LLM repair)
+            print(f"\n[Auto-Healing System] Executing python script failed with error. Attempting self-healing...\nError details:\n{output}\n")
+            sys.stdout.flush()
+            healed_script = _heal_script_code(script, output)
+            if healed_script and healed_script != script:
+                success_h, output_h = _run_in_subprocess(healed_script, timeout=timeout, is_healed_attempt=True)
+                if success_h:
+                    print("[Auto-Healing System] Code repaired and executed successfully!")
+                    sys.stdout.flush()
+                    return True, f"[Auto-Healing system resolved a code error!]\nOriginal Error:\n{output}\n\nSuccessful Execution Output:\n{output_h}"
+                else:
+                    print("[Auto-Healing System] Attempted repair but healed script still failed.")
+                    sys.stdout.flush()
+                    
         return success, output or "(no output)"
     except subprocess.TimeoutExpired:
         return False, f"Execution timed out after {timeout}s."
@@ -419,23 +504,33 @@ def generate_plotly_charts(csv_path: str, relations_text: str, max_rows: int = 5
 class DatasetTools:
 
     @tool("Read Dataset Head")
-    def read_dataset_head(file_path: str) -> str:
+    def read_dataset_head(file_path: Optional[str] = None) -> str:
         """Reads the first 10 rows of the dataset to understand its structure.
         Uses nrows=10 so the entire file is never loaded into memory.
+        If file_path is not specified or is invalid, the active session's CSV will be used.
         """
         try:
-            df = read_csv_robust(file_path, nrows=10)
+            from config.context import current_session_csv
+            fp = file_path
+            if not fp or not isinstance(fp, str) or fp.lower() == "none" or "properties" in str(fp):
+                fp = current_session_csv.get() or os.getenv("CURRENT_SESSION_CSV", "")
+            df = read_csv_robust(fp, nrows=10)
             return _df_to_markdown(df, index=False)
         except Exception as e:
             return f"Error reading file: {e}"
 
     @tool("Get Dataset Info")
-    def get_dataset_info(file_path: str) -> str:
+    def get_dataset_info(file_path: Optional[str] = None) -> str:
         """Returns basic information about the dataset: shape, columns, data types,
         and missing-value counts.
+        If file_path is not specified or is invalid, the active session's CSV will be used.
         """
         try:
-            df = read_csv_robust(file_path)
+            from config.context import current_session_csv
+            fp = file_path
+            if not fp or not isinstance(fp, str) or fp.lower() == "none" or "properties" in str(fp):
+                fp = current_session_csv.get() or os.getenv("CURRENT_SESSION_CSV", "")
+            df = read_csv_robust(fp)
             lines = [f"Shape: {df.shape}", "\nColumns and Types:"]
             for col, dtype in df.dtypes.items():
                 missing = df[col].isnull().sum()
@@ -445,14 +540,16 @@ class DatasetTools:
             return f"Error analyzing file: {e}"
 
     @tool("Get Correlation Matrix")
-    def get_correlation_matrix(file_path: str) -> str:
+    def get_correlation_matrix(file_path: Optional[str] = None) -> str:
         """Returns the top-20 strongest column-pair correlations (by absolute value).
-
-        Sending a full N×N matrix to the LLM wastes tokens and may exceed context
-        limits for wide datasets. Only the most informative pairs are returned.
+        If file_path is not specified or is invalid, the active session's CSV will be used.
         """
         try:
-            df = read_csv_robust(file_path)
+            from config.context import current_session_csv
+            fp = file_path
+            if not fp or not isinstance(fp, str) or fp.lower() == "none" or "properties" in str(fp):
+                fp = current_session_csv.get() or os.getenv("CURRENT_SESSION_CSV", "")
+            df = read_csv_robust(fp)
             numeric_df = df.select_dtypes(include=["number"])
             if numeric_df.empty:
                 return "No numeric columns found."
@@ -476,9 +573,9 @@ class DatasetTools:
             return f"Error calculating correlation: {e}"
 
     @tool("Clean Dataset with Python Code")
-    def clean_dataset_with_python(file_path: str, python_code: str) -> str:
-        """Cleans the dataset at *file_path* by executing *python_code* in an
-        isolated subprocess.
+    def clean_dataset_with_python(file_path: Optional[str] = None, python_code: Optional[str] = None) -> str:
+        """Cleans the dataset by executing *python_code* in an isolated subprocess.
+        The file_path parameter is optional and defaults to the active session's dataset CSV.
 
         Your code must:
           1. Read the CSV:  df = pd.read_csv(FILE_PATH)   # FILE_PATH is pre-set
@@ -487,13 +584,26 @@ class DatasetTools:
 
         Do NOT include markdown code fences. Do NOT use any other file paths.
         """
+        # Swap if python_code is not specified but file_path contains code
+        if not python_code:
+            if file_path and ("import " in file_path or "df[" in file_path or "\n" in file_path):
+                python_code = file_path
+                file_path = None
+            else:
+                return "Error: python_code is required."
+
+        from config.context import current_session_csv
+        fp = file_path
+        if not fp or not isinstance(fp, str) or fp.lower() == "none" or "properties" in str(fp):
+            fp = current_session_csv.get() or os.getenv("CURRENT_SESSION_CSV", "")
+
         clean_code = _strip_markdown_fences(python_code)
 
         script = textwrap.dedent(f"""\
             import os
             import pandas as pd
 
-            FILE_PATH = {repr(str(file_path))}
+            FILE_PATH = {repr(str(fp))}
             df = pd.read_csv(FILE_PATH)
         """) + "\n" + clean_code + "\n" + textwrap.dedent(f"""\
             df.to_csv(FILE_PATH, index=False)
@@ -506,7 +616,7 @@ class DatasetTools:
         return f"Error executing cleaning code:\n{output}"
 
     @tool("Execute Visualization Code")
-    def execute_visualization_code(python_code: str) -> str:
+    def execute_visualization_code(python_code: Optional[str] = None, **kwargs) -> str:
         """Executes Python plotting code to generate and save PNG visual charts.
 
         The code runs in a pre-configured Python environment where:
@@ -522,6 +632,14 @@ class DatasetTools:
           save_chart('chart_name.png')
           plt.close()
         """
+        if not python_code:
+            for k, v in kwargs.items():
+                if v and isinstance(v, str) and ("plt." in v or "sns." in v or "import " in v or "\n" in v):
+                    python_code = v
+                    break
+            if not python_code:
+                return "Error: python_code is required."
+
         clean_code = _strip_markdown_fences(python_code)
         from config.context import current_session_csv, current_session_output_dir
         csv_path = current_session_csv.get() or os.getenv("CURRENT_SESSION_CSV", "")
@@ -560,3 +678,98 @@ class DatasetTools:
         if success:
             return f"Visualization executed successfully. Output:\n{output}"
         return f"Error executing visualization code:\n{output}"
+
+
+def auto_coerce_types(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """
+    Analyze columns in the DataFrame, detect type mismatches/conflicts,
+    and convert them to their appropriate types (e.g., object to numeric or datetime).
+    Returns (converted_df, list_of_actions).
+    """
+    actions = []
+    df = df.copy()
+    
+    for col in df.columns:
+        # Skip empty columns
+        if df[col].isnull().all():
+            continue
+            
+        dtype = df[col].dtype
+        
+        # We only need to coerce object/string columns
+        if dtype == 'object':
+            sample_non_null = df[col].dropna().head(200).astype(str)
+            if sample_non_null.empty:
+                continue
+                
+            # 1. Heuristic for Date: check if strings contain date patterns
+            date_like_count = 0
+            for val in sample_non_null:
+                val_clean = val.strip()
+                # Skip 4-digit years (e.g. 1990) to prevent converting them to date objects
+                if val_clean.isdigit() and len(val_clean) == 4:
+                    continue
+                # matches YYYY-MM-DD, DD/MM/YYYY, or wordy dates like "01 Jul 2026"
+                if re.match(r'^\d{4}[-/]\d{1,2}[-/]\d{1,2}', val_clean) or \
+                   re.match(r'^\d{1,2}[-/]\d{1,2}[-/]\d{4}', val_clean) or \
+                   re.search(r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)', val_clean, re.IGNORECASE):
+                    date_like_count += 1
+            
+            if date_like_count > len(sample_non_null) * 0.5:
+                try:
+                    try:
+                        converted = pd.to_datetime(df[col], errors='coerce', format='mixed')
+                    except (ValueError, TypeError):
+                        converted = pd.to_datetime(df[col], errors='coerce')
+                    # If conversion didn't result in all NaTs
+                    if not converted.isnull().all() and converted.notnull().sum() > len(df[col].dropna()) * 0.7:
+                        df[col] = converted
+                        actions.append(f"Converted column '{col}' to Datetime (detected date-like patterns)")
+                        continue
+                except Exception:
+                    pass
+
+            # 2. Heuristic for Numeric: check if it could be a numeric column stored as string
+            # (e.g., currency "$1,000", percentage "95%", or numbers with commas/spaces)
+            numeric_like_count = 0
+            for val in sample_non_null:
+                val_clean = re.sub(r'[\$,%\s]', '', val).replace(',', '')
+                if re.match(r'^-?\d+(?:\.\d+)?$', val_clean):
+                    numeric_like_count += 1
+                    
+            if numeric_like_count > len(sample_non_null) * 0.8:
+                try:
+                    # Clean currency symbols, commas, percent signs, and spaces
+                    cleaned_col = df[col].astype(str).str.replace(r'[\$,%\s]', '', regex=True).str.replace(',', '', regex=False)
+                    # Convert to numeric
+                    converted = pd.to_numeric(cleaned_col, errors='coerce')
+                    if not converted.isnull().all():
+                        # If it contains float values (has decimal points), keep as float, otherwise int if no NaNs
+                        if (converted.dropna() % 1 == 0).all() and not converted.isnull().any():
+                            df[col] = converted.astype(int)
+                            actions.append(f"Converted column '{col}' to Integer (cleaned currency/delimiters)")
+                        else:
+                            df[col] = converted
+                            actions.append(f"Converted column '{col}' to Float (cleaned currency/delimiters)")
+                        continue
+                except Exception:
+                    pass
+                    
+            # 3. Heuristic for Boolean: check for binary values (Yes/No, True/False, Y/N, 1/0)
+            unique_vals = set(sample_non_null.str.lower().str.strip())
+            if unique_vals.issubset({'yes', 'no', 'y', 'n', 'true', 'false', 't', 'f', '1', '0'}):
+                # Ensure we have both binary parts represented, not just a single constant value column
+                if len(unique_vals) >= 2:
+                    try:
+                        bool_map = {
+                            'yes': True, 'no': False, 'y': True, 'n': False,
+                            'true': True, 'false': False, 't': True, 'f': False,
+                            '1': True, '0': False
+                        }
+                        df[col] = df[col].astype(str).str.lower().str.strip().map(bool_map)
+                        actions.append(f"Converted column '{col}' to Boolean (detected binary labels)")
+                        continue
+                    except Exception:
+                        pass
+
+    return df, actions

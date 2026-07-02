@@ -2,7 +2,7 @@
 
 ## Overview
 
-**Multi Agent Data Analysis with Crew AI** is a premium "Data Analysis as a Service" tool. It uses a swarm of specialized AI agents to clean, validate, analyze, and visualize your datasets automatically.
+**Crewlyze** is a premium "Data Analysis as a Service" tool. It uses a swarm of specialized AI agents to clean, validate, analyze, and visualize your datasets automatically.
 
 ## Prerequisites
 
@@ -101,6 +101,6 @@ For issues, please open a ticket on our GitHub repository.
 
 ---
 
-*Multi Agent Data Analysis with Crew AI*
+*Crewlyze*
 *Copyright (c) 2025 Sowmiyan S*
 *Licensed under the MIT License*

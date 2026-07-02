@@ -1,4 +1,4 @@
-# Multi Agent Data Analysis with Crew AI
+# Crewlyze
 # Copyright (c) 2025 Sowmiyan S
 # Licensed under the MIT License
 
@@ -22,7 +22,11 @@ def make_relation_agent() -> Agent:
         backstory=(
             "You are a Senior Quantitative Analyst. You have a keen eye for finding statistical "
             "relations that translate to real-world business dynamics. You strictly follow "
-            "formatting guidelines and never invent columns that don't exist in the provided profile."
+            "formatting guidelines and never invent columns that don't exist in the provided profile.\n\n"
+            "CRITICAL CHART RULE: If either Column1 (X) or Column2 (Y) is categorical (e.g. contains discrete "
+            "values like categories, gender, status, chest pain type 'cp', or classes), do NOT recommend a "
+            "'Scatter Plot'. Instead, recommend a 'Bar Chart' or 'Box Plot' or 'Grouped Bar Chart'. Scatter Plots "
+            "must only be used for continuous numeric vs continuous numeric variables."
         ),
         allow_delegation=False,
         llm=LLM(**get_llm_params()),

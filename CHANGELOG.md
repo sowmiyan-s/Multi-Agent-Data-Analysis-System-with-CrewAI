@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the Multi Agent Data Analysis with Crew AI project will be documented in this file.
+All notable changes to the Crewlyze project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -61,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Professional Reporting**: Updated `index.html` with a modern, dark-themed UI, visual scorecards for data quality, and structured insight presentation.
 
 ### Changed
-- **Project Branding**: Renamed to "Multi Agent Data Analysis with Crew AI".
+- **Project Branding**: Renamed to "Crewlyze".
 - **Agent Roles**: 
     - Validator: Dataset Validator -> Data Quality Assurance Specialist
     - Insights: Insights Agent -> Business Intelligence Analyst

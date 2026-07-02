@@ -1,4 +1,4 @@
-# Multi Agent Data Analysis with Crew AI
+# Crewlyze
 # Copyright (c) 2025 Sowmiyan S
 # Licensed under the MIT License
 
@@ -420,7 +420,7 @@ def run_crew(
         existing_png.unlink(missing_ok=True)
 
     print("=" * 50)
-    print("Multi Agent Data Analysis with Crew AI")
+    print("Crewlyze")
     print("=" * 50)
 
     # ── Load original dataset ─────────────────────────────────────────────────
@@ -448,6 +448,39 @@ def run_crew(
     os.environ["CURRENT_SESSION_CSV"] = str(cleaned_path)
     os.environ["CURRENT_SESSION_OUTPUT_DIR"] = str(session_output_dir)
 
+    # Determine requested task stages and deep analysis mode
+    if selected_tasks is None:
+        selected_tasks = []
+
+    env_tasks = selected_tasks or []
+    if not env_tasks:
+        env_tasks = ["cleaning", "relations", "insights", "visualization"]
+    do_cleaning = "cleaning" in env_tasks
+    do_relations = "relations" in env_tasks
+    do_insights = "insights" in env_tasks
+    do_visualization = "visualization" in env_tasks
+
+    # ── Automatic Data Type Inference and Coercion ────────────────────────────
+    coercion_summary = ""
+    if do_cleaning:
+        print("Running automatic data type coercion ...")
+        from tools.dataset_tools import auto_coerce_types
+        df_coerced, coercion_actions = auto_coerce_types(df)
+        if coercion_actions:
+            print("Data type coercion completed:")
+            coercion_lines = []
+            for action in coercion_actions:
+                print(f"  - {action}")
+                coercion_lines.append(f"- {action}")
+            coercion_summary = "\n".join(coercion_lines)
+            # Save the coerced dataframe to cleaned_path
+            df_coerced.to_csv(cleaned_path, index=False)
+            # Update our in-memory df and shapes
+            df = df_coerced
+            n_rows, n_cols = df.shape
+        else:
+            print("No type conflicts detected.")
+
     # ── Pre-compute dataset profile (eliminates 6-8 agent tool-call round-trips)
     # Large files are sampled; the cleaner still operates on the full dataset.
     profile_max_rows = 5000 if n_rows > 10_000 else n_rows
@@ -459,21 +492,9 @@ def run_crew(
     _progress("profiling", profile)
     print("Profile ready.\n")
 
-    # Determine requested task stages and deep analysis mode
-    if selected_tasks is None:
-        selected_tasks = []
-
     if not deep_analysis:
         from config.context import current_deep_analysis
         deep_analysis = current_deep_analysis.get()
-
-    env_tasks = selected_tasks or []
-    if not env_tasks:
-        env_tasks = ["cleaning", "relations", "insights", "visualization"]
-    do_cleaning = "cleaning" in env_tasks
-    do_relations = "relations" in env_tasks
-    do_insights = "insights" in env_tasks
-    do_visualization = "visualization" in env_tasks
 
     # Load goal, title, and existing tweaked relations if available
     project_goal = ""
@@ -506,6 +527,7 @@ def run_crew(
         project_goal=project_goal,
         report_title=report_title,
         existing_relations=existing_relations,
+        coercion_summary=coercion_summary,
     )
     # tasks = [clean_task, relation_task, insight_task, visualize_task]
 
@@ -680,5 +702,5 @@ if __name__ == "__main__":
     report = run_crew(path, session_id="cli")
     if report:
         print("\nAnalysis Complete.")
-        print("Multi Agent Data Analysis with Crew AI")
+        print("Crewlyze")
         print("Prithiv.A.K  Sebin.S  Sowmiyan.S")

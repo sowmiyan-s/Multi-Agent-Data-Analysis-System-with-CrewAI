@@ -1,9 +1,9 @@
-# Multi Agent Data Analysis with Crew AI
+# Crewlyze
 # Copyright (c) 2025 Sowmiyan S
 # Licensed under the MIT License
 
 """
-FastAPI Server backend for the Agentic Data Analyst application.
+FastAPI Server backend for the Crewlyze application.
 Serves static HTML/JS/CSS assets and exposes REST APIs + Server-Sent Events (SSE)
 for streaming real-time analysis logs.
 """
@@ -159,8 +159,8 @@ def _load_crew():
     if _run_crew is None:
         from crew import run_crew as _rc
         from config.llm_config import apply_runtime_llm_settings as _arls, validate_llm_connection as _vlc
-        from tools.ui.copilot import run_copilot_query as _rcq
-        from tools.ui.export import export_pdf as _ep
+        from ui.copilot import run_copilot_query as _rcq
+        from ui.export import export_pdf as _ep
         _run_crew = _rc
         _apply_runtime_llm_settings = _arls
         _validate_llm_connection = _vlc
@@ -172,7 +172,7 @@ os.environ["CREWAI_TELEMETRY_OPT_OUT"] = "true"
 os.environ["OTEL_SDK_DISABLED"]        = "true"
 
 app = FastAPI(
-    title="Agentic Data Analyst API",
+    title="Crewlyze API",
     description="Autonomous Multi-Agent Business Intelligence and Data Engineering Platform",
     version="3.1.0"
 )
@@ -488,7 +488,7 @@ def run_crew_in_background(
                 }
 
                 # Cache first 100 rows as JSON data preview
-                preview_data = result["dataframe"].head(100).to_dict(orient="records")
+                preview_data = result["dataframe"].head(100).replace([float('inf'), float('-inf')], float('nan')).fillna("").to_dict(orient="records")
                 serializable_result["preview"] = preview_data
 
                 with open(results_path, "w", encoding="utf-8") as f:
@@ -1189,7 +1189,7 @@ if __name__ == "__main__":
     import uvicorn
     # Start server on 8000
     print("\n" + "=" * 50)
-    print("Agentic Data Analyst Web Platform")
+    print("Crewlyze Web Platform")
     print("Local URL: http://localhost:8000")
     print("=" * 50 + "\n")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

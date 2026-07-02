@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════
-   Agentic Data Analyst — Premium Dark Web UI
+   Crewlyze — Premium Dark Web UI
    Design: Obsidian + Electric Violet + Cyan Accents
    ══════════════════════════════════════════════════════ */
 
@@ -116,10 +116,10 @@ html, body {
   background: none;
   border: 1px solid var(--border-mid);
   color: var(--text-secondary);
-  width: 24px; height: 24px;
-  border-radius: var(--r-sm);
+  width: 32px; height: 32px;
+  border-radius: var(--r-md);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 18px;
   transition: all 0.2s;
   display: flex; align-items: center; justify-content: center;
 }
@@ -239,7 +239,7 @@ html, body {
 .status-pill.error     { background: rgba(244,63,94,0.15);  color: var(--rose); }
 
 /* ── Screens ─────────────────────────────────────────── */
-.screen { display: none; flex: 1; overflow-y: auto; padding: 32px 28px 28px; }
+.screen { display: none; flex: 1; min-height: 0; overflow-y: auto; padding: 32px 28px 28px; }
 .screen.active { display: flex; flex-direction: column; gap: 28px; }
 
 /* ── Landing ─────────────────────────────────────────── */
@@ -585,8 +585,8 @@ html, body {
   -webkit-backdrop-filter: none;
   border: none;
   border-radius: 0;
-  padding: 16px 0;
-  overflow: hidden;
+  padding: 24px 0 32px 0; /* Increase bottom padding to accommodate labels */
+  overflow: visible;      /* Allow labels to be shown fully without vertical clipping */
   box-shadow: none;
 }
 .stage-item {
@@ -630,11 +630,14 @@ html, body {
 .stage-item.done .stage-dot {
   background: var(--emerald);
   border-color: var(--emerald);
-  box-shadow: 0 0 14px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.5);
+  transform: scale(1.0);
 }
 .stage-item.active .stage-dot {
   background: var(--violet-light);
   border-color: var(--violet-light);
+  transform: scale(1.15); /* Scale active dot to stand out */
+  box-shadow: 0 0 18px rgba(167, 139, 250, 0.6);
   animation: stageDotActivePulse 1.4s infinite alternate;
 }
 .stage-label {
@@ -647,11 +650,22 @@ html, body {
 }
 .stage-item.done .stage-label {
   color: var(--emerald);
-  text-shadow: 0 0 8px rgba(16, 185, 129, 0.2);
+  font-weight: 700;
+  text-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
 }
 .stage-item.active .stage-label {
   color: var(--violet-light);
-  text-shadow: 0 0 8px rgba(167, 139, 250, 0.3);
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(167, 139, 250, 0.4);
+}
+
+@keyframes stageDotActivePulse {
+  0% {
+    box-shadow: 0 0 0 0px rgba(167, 139, 250, 0.6), 0 0 12px rgba(167, 139, 250, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 8px rgba(167, 139, 250, 0.0), 0 0 20px rgba(167, 139, 250, 0.8);
+  }
 }
 /* ── Stage POV Panel ────────────────────────────────── */
 .stage-pov-panel {
@@ -1882,10 +1896,10 @@ html, body {
   background: none;
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  padding: 6px 12px;
-  border-radius: var(--r-sm);
+  padding: 10px 16px;
+  border-radius: var(--r-md);
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 1rem;
   transition: all 0.2s;
 }
 .btn-back:hover {
@@ -2322,3 +2336,106 @@ html, body {
 
 
 
+
+/* --- Markdown Body Styles (AI Chat Tables & Lists) --- */
+.markdown-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9em;
+    border-radius: var(--r-md);
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px var(--border-color);
+}
+.markdown-body th, .markdown-body td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+.markdown-body th {
+    background: rgba(255, 255, 255, 0.05);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.markdown-body tr:last-child td {
+    border-bottom: none;
+}
+.markdown-body tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+.markdown-body ul, .markdown-body ol {
+    margin: 0.8rem 0;
+    padding-left: 1.5rem;
+}
+.markdown-body li {
+    margin-bottom: 0.4rem;
+}
+.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
+    margin-top: 1.2rem;
+    margin-bottom: 0.6rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.markdown-body h3 { font-size: 1.1em; }
+.markdown-body p { margin-bottom: 0.8rem; }
+.markdown-body p:last-child { margin-bottom: 0; }
+.markdown-body code {
+    background: var(--bg-surface);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    color: var(--accent-color);
+}
+.markdown-body pre {
+    background: var(--bg-surface);
+    padding: 12px;
+    border-radius: var(--r-md);
+    overflow-x: auto;
+    margin: 1rem 0;
+    border: 1px solid var(--border-color);
+}
+.markdown-body pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+}
+
+
+/* --- ChatGPT-style Full Screen AI Chat Mode --- */
+#resultsScreen.ai-chat-mode .stats-row,
+#resultsScreen.ai-chat-mode .sections-switch,
+#resultsScreen.ai-chat-mode .export-bar,
+#resultsScreen.ai-chat-mode #datasetExplorerCard {
+    display: none !important;
+}
+
+#resultsScreen.ai-chat-mode {
+    padding: 10px 20px !important;
+}
+
+#resultsScreen.ai-chat-mode #areaChat {
+    margin: 0 !important;
+}
+
+#resultsScreen.ai-chat-mode #chatContainerCard {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 10px !important;
+    box-shadow: none !important;
+}
+
+#resultsScreen.ai-chat-mode #chatMessages {
+    max-height: none !important;
+    height: 100% !important;
+}
+
+/* Fix text squishing inside chat bubbles */
+.chat-msg {
+    align-items: flex-start;
+}
+.chat-bubble {
+    width: fit-content;
+    min-width: 0; /* Prevents extreme flex collapse in some browsers */
+    word-break: break-word; /* Ensures long words wrap instead of breaking layout */
+}

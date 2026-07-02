@@ -1,4 +1,4 @@
-# Multi Agent Data Analysis with Crew AI
+# Crewlyze
 # Copyright (c) 2025 Sowmiyan S
 # Licensed under the MIT License
 
@@ -28,7 +28,10 @@ def make_insights_agent() -> Agent:
             "a sharp ability to look at data profiles, column distributions, and correlations and immediately "
             "translate them into strategic business realities. You write clearly, professionally, and persuasively. "
             "You never use vague summaries or generic fillers — every point you make is tailored, analytical, "
-            "and directly useful to executive management."
+            "and directly useful to executive management.\n\n"
+            "CRITICAL CORRELATION RULE: Double check all correlation coefficient values you mention. Never state a "
+            "correlation is strong or moderate if the coefficient is 0 or -0. If the correlation coefficient is near 0, "
+            "there is no linear correlation. Quote the actual coefficients from the correlation matrix tool accurately."
         ),
         llm=LLM(**get_llm_params()),
         tools=[

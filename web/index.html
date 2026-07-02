@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Agentic Data Analyst — AI-Powered Business Intelligence</title>
+  <title>Crewlyze — AI-Powered Business Intelligence</title>
   <meta name="description" content="Autonomous Multi-Agent AI system for data cleaning, relationship analysis, business insights, and interactive visualizations." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="/style.css" />
@@ -20,7 +21,7 @@
   <div class="sidebar-header">
     <div class="logo" id="sidebarLogo" style="cursor: pointer;" title="Go to Dashboard">
       <span class="logo-icon">⬡</span>
-      <span class="logo-text">DataAgent<span class="logo-accent">AI</span></span>
+      <span class="logo-text">Crew<span class="logo-accent">lyze</span></span>
     </div>
     <button id="sidebarToggle" class="sidebar-toggle" title="Collapse sidebar">‹</button>
   </div>
@@ -67,7 +68,7 @@
 
   <div class="sidebar-footer">
     <button id="sidebarSettingsBtn" class="btn-secondary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; padding: 8px 12px; border-radius: var(--r-sm); font-size: 0.8rem; background: var(--bg-elevated); border: 1px solid var(--border-mid); color: var(--text-primary); cursor: pointer; transition: all 0.2s;"><i data-lucide="settings" style="width: 14px; height: 14px;"></i> Settings</button>
-    <span>Agentic Data Analyst v3.1</span>
+    <span>Crewlyze v3.1</span>
   </div>
 </aside>
 
@@ -91,7 +92,7 @@
   <section id="landingScreen" class="screen active">
     <div class="landing-hero">
       <div class="hero-badge">✦ Powered by CrewAI Multi-Agent Pipeline</div>
-      <h1 class="hero-title">Agentic Data<br/><span class="gradient-text">Intelligence</span></h1>
+      <h1 class="hero-title"><span class="gradient-text">Crewlyze</span></h1>
       <p class="hero-subtitle">Upload a CSV and let autonomous AI agents clean your data, discover relationships, surface strategic insights, and generate interactive visualizations — all in one pipeline.</p>
 
       <!-- Wizard Container -->
@@ -340,11 +341,14 @@
         <!-- Chat Container -->
         <div id="chatContainerCard" class="card" style="padding: 20px; background: var(--bg-elevated); border: 1px solid var(--border-mid); display: flex; flex-direction: column; min-height: 480px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-low); padding-bottom: 12px;">
-            <h3 style="margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;"><i data-lucide="message-square" style="width: 18px; height: 18px; color: var(--violet-light);"></i> AI Copilot &amp; Data Interaction</h3>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <button id="chatBackBtn" class="btn-icon" style="background:var(--bg-elevated); border:1px solid var(--border-mid); border-radius:var(--r-md); padding:10px; cursor:pointer; color:var(--text-primary);" title="Back to Dashboard"><i data-lucide="arrow-left" style="width:20px; height:20px;"></i></button>
+              <h3 style="margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;"><i data-lucide="message-square" style="width: 18px; height: 18px; color: var(--violet-light);"></i> AI Copilot</h3>
+            </div>
             <button id="clearChatBtn" class="btn-secondary btn-sm">Clear Conversation</button>
           </div>
           
-          <div id="chatMessages" class="chat-messages" style="flex: 1; min-height: 260px; max-height: 420px; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px;">
+          <div id="chatMessages" class="chat-messages" style="flex: 1; min-height: 260px; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px;">
             <!-- messages populate here -->
           </div>
 
@@ -397,7 +401,7 @@
         <!-- RELATIONS -->
         <div class="tab-panel" id="panel-relations">
           <h3 class="panel-title"><i data-lucide="link" style="width: 18px; height: 18px; vertical-align: middle; margin-right: 6px;"></i> Relationship Mapping</h3>
-          <div id="relationsContent" class="relations-grid"></div>
+          <div id="relationsContent" style="width: 100%;"></div>
         </div>
 
         <!-- INSIGHTS -->

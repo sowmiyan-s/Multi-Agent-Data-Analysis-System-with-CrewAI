@@ -1,4 +1,4 @@
-# Multi Agent Data Analysis with Crew AI
+# Crewlyze
 # Copyright (c) 2025 Sowmiyan S
 # Licensed under the MIT License
 
@@ -81,6 +81,7 @@ def make_pipeline(
     project_goal: str = "",
     report_title: str = "",
     existing_relations: str = "",
+    coercion_summary: str = "",
 ) -> tuple[list, list]:
     """
     Build and return (agents, tasks) for a single analysis run.
@@ -117,12 +118,19 @@ def make_pipeline(
     
     goal_context = f"\nThe user has set the following goal for this project: '{project_goal}'." if project_goal else ""
     
+    coercion_block = (
+        f"\n\n--- AUTOMATIC TYPE CONVERSIONS PERFORMED ---\n{coercion_summary}\n"
+        "Explain the business rationale of these automatic type conversions in your final report."
+        if coercion_summary else ""
+    )
+
     cleaning_prompt = (
         f"The dataset working copy is at '{csv_path}'. "
         f"{goal_context} "
         "Identify data quality issues from the profile below, then write and run "
         "Python cleaning code using 'Clean Dataset with Python Code' to fix them. "
         "Explain the business rationale of each cleaning step in the final report."
+        f"{coercion_block}"
         f"{deep_prompt}{profile_block}"
     )
 
@@ -203,7 +211,8 @@ def make_pipeline(
         "- Matplotlib and Seaborn are pre-imported. Do NOT load CSVs or create folders yourself!\n\n"
         "CODE REQUIREMENTS:\n"
         "- Set style theme: 'sns.set_theme(style=\"whitegrid\", palette=\"muted\")'\n"
-        "- Use high-end palette hex colors (e.g. `#6366f1` for Indigo, `#06b6d4` for Teal, `#ec4899` for Pink, `#10b981` for Emerald).\n"
+        "- Apply clean white/light styling: set figure facecolor to 'white', axes facecolor to '#f8fafc', grid lines to a subtle light gray, and tick/label text to '#334155'.\n"
+        "- Use high-contrast corporate hex colors (e.g. `#4f46e5` for Indigo/Blue, `#06b6d4` for Cyan/Teal, `#ec4899` for Pink, `#10b981` for Emerald).\n"
         "- Set figure size to `(10, 6)` or `(12, 6)`.\n"
         "- Set clear, descriptive titles and wrap long titles: 'plt.title(textwrap.fill(title, 40))'.\n"
         "- Apply 'sns.despine(left=True, bottom=True)' to remove borders.\n"

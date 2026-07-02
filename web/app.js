@@ -1,5 +1,5 @@
 /**
- * Agentic Data Analyst — Web App JavaScript
+ * Crewlyze — Web App JavaScript
  * Connects to the FastAPI backend at the same origin.
  *
  * Features:
@@ -195,6 +195,7 @@ const els = {
 
   // Chat
   chatMessages:      $('chatMessages'),
+  chatBackBtn:       $('chatBackBtn'),
   chatInput:         $('chatInput'),
   sendChatBtn:       $('sendChatBtn'),
   clearChatBtn:      $('clearChatBtn'),
@@ -797,12 +798,36 @@ els.testConnectionBtn.addEventListener('click', async () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// Projects sidebar
+// Projects sidebar & Local Storage Tracking
 // ────────────────────────────────────────────────────────────────────────────
+function getMyProjects() {
+  try {
+    return JSON.parse(localStorage.getItem('owned_projects') || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function addMyProject(id) {
+  const projects = getMyProjects();
+  if (!projects.includes(id)) {
+    projects.push(id);
+    localStorage.setItem('owned_projects', JSON.stringify(projects));
+  }
+}
+
+function removeMyProject(id) {
+  let projects = getMyProjects();
+  projects = projects.filter(p => p !== id);
+  localStorage.setItem('owned_projects', JSON.stringify(projects));
+}
+
 async function loadProjects() {
   try {
     const res = await fetch('/api/projects');
-    state.projects = await res.json();
+    const allProjects = await res.json();
+    const myProjectIds = getMyProjects();
+    state.projects = allProjects.filter(p => myProjectIds.includes(p.id));
     renderProjectsList();
   } catch {
     // Server not ready yet, retry
@@ -1037,6 +1062,7 @@ async function deleteProject(id) {
   if (!confirmed) return;
   delete state.resultsCache[id];
   await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+  removeMyProject(id);
   if (state.activeProject?.id === id) {
     state.activeProject = null;
     showScreen('landing');
@@ -1086,6 +1112,7 @@ if (els.importProjectCard && els.importZipFileInput) {
       if (!res.ok) throw new Error((await res.json()).detail || 'Import failed');
       const data = await res.json();
       toast(`Project imported successfully: ${data.name}`, 'success');
+      addMyProject(data.id);
       
       // Reset input
       els.importZipFileInput.value = '';
@@ -1223,6 +1250,7 @@ async function handleFileSelected(file) {
     els.uploadedFileMeta.classList.remove('hidden');
     els.uploadedFileActions.classList.remove('hidden');
     toast(`Project created: ${state.newProjectName || data.name}`, 'success');
+    addMyProject(data.id);
     
     // Auto-enter project workspace
     resetWizardState();
@@ -1713,6 +1741,9 @@ async function loadResults(sessionId, retryCount = 0) {
     }
     if (state.activeProject) state.activeProject.status = 'completed';
     setStatus('● Complete', 'complete');
+    if (els.agenticPlaceholder) els.agenticPlaceholder.classList.add('hidden');
+    if (els.agenticTabsBar) els.agenticTabsBar.classList.remove('hidden');
+    if (els.agenticTabPanels) els.agenticTabPanels.classList.remove('hidden');
     renderDashboard(data, sessionId);
     showScreen('results');
     return;
@@ -1754,6 +1785,10 @@ async function loadResults(sessionId, retryCount = 0) {
     if (state.activeProject) state.activeProject.status = 'completed';
     loadProjects();
     setStatus('● Complete', 'complete');
+
+    if (els.agenticPlaceholder) els.agenticPlaceholder.classList.add('hidden');
+    if (els.agenticTabsBar) els.agenticTabsBar.classList.remove('hidden');
+    if (els.agenticTabPanels) els.agenticTabPanels.classList.remove('hidden');
 
     renderDashboard(data, sessionId);
     
@@ -1944,7 +1979,7 @@ function renderRelationsListUI() {
 
   // Footer Actions
   html += `
-    <div style="display: flex; gap: 12px; margin-top: 16px; justify-content: flex-end; width: 100%;">
+    <div style="display: flex; gap: 12px; margin-top: 16px; justify-content: flex-end; width: 100%; grid-column: 1 / -1;">
       <button id="btnAddRelation" class="btn-secondary" style="font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; gap: 4px;"><i data-lucide="plus" style="width: 14px; height: 14px;"></i> Add Custom Relation</button>
       <button id="btnSaveRelations" class="btn-primary" style="font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; gap: 4px;"><i data-lucide="save" style="width: 14px; height: 14px;"></i> Save Schema Tweaks</button>
     </div>
@@ -2120,29 +2155,120 @@ function renderInsights(text) {
 
   // 2. Dataset Statistics Grid
   if (statsText) {
-    const statLines = statsText.split('\n').map(l => l.trim()).filter(l => l.startsWith('-') || l.startsWith('*'));
-    if (statLines.length > 0) {
-      html += `<div class="insight-stats-grid">`;
-      statLines.forEach(line => {
-        const cleanLine = line.replace(/^[-*•]\s*/, '');
-        const colIndex = cleanLine.indexOf(':');
-        if (colIndex > -1) {
-          const key = cleanLine.slice(0, colIndex).trim();
-          const val = cleanLine.slice(colIndex + 1).trim();
-          html += `
-            <div class="insight-stat-card">
-              <div class="insight-stat-val">${escHtml(val)}</div>
-              <div class="insight-stat-lbl">${escHtml(key)}</div>
-            </div>
-          `;
+    const lines = statsText.split('\n').map(l => l.trim()).filter(Boolean);
+    let summaryStats = [];
+    let numericCols = [];
+    let categoricalCols = [];
+    
+    let currentSection = "";
+    
+    lines.forEach(line => {
+      const cleanLine = line.replace(/^[-*•]\s*/, '').trim();
+      const lowerLine = cleanLine.toLowerCase();
+      
+      if (lowerLine.startsWith("numeric column")) {
+        currentSection = "numeric";
+        return;
+      } else if (lowerLine.startsWith("categorical column")) {
+        currentSection = "categorical";
+        return;
+      }
+      
+      const colIndex = cleanLine.indexOf(':');
+      if (colIndex > -1) {
+        const key = cleanLine.slice(0, colIndex).trim();
+        const val = cleanLine.slice(colIndex + 1).trim();
+        
+        if (lowerLine.startsWith("total row") || lowerLine.startsWith("total record") || lowerLine.startsWith("total col")) {
+          summaryStats.push({ key, val });
+        } else {
+          if (currentSection === "numeric") {
+            numericCols.push({ col: key, stats: val });
+          } else if (currentSection === "categorical") {
+            categoricalCols.push({ col: key, stats: val });
+          } else {
+            if (lowerLine.includes("min") || lowerLine.includes("max") || lowerLine.includes("mean")) {
+              numericCols.push({ col: key, stats: val });
+            } else {
+              categoricalCols.push({ col: key, stats: val });
+            }
+          }
         }
+      } else {
+        if (cleanLine) {
+          if (currentSection === "numeric") {
+            numericCols.push({ col: cleanLine, stats: "" });
+          } else if (currentSection === "categorical") {
+            categoricalCols.push({ col: cleanLine, stats: "" });
+          }
+        }
+      }
+    });
+
+    // A. Summary Cards
+    if (summaryStats.length > 0) {
+      html += `<div class="insight-stats-grid" style="margin-bottom: 20px;">`;
+      summaryStats.forEach(s => {
+        html += `
+          <div class="insight-stat-card">
+            <div class="insight-stat-val">${escHtml(s.val)}</div>
+            <div class="insight-stat-lbl">${escHtml(s.key)}</div>
+          </div>
+        `;
       });
       html += `</div>`;
-    } else {
+    }
+    
+    // B. Side-by-Side Sections
+    if (numericCols.length > 0 || categoricalCols.length > 0) {
       html += `
-        <div class="card" style="padding: 16px; margin-bottom: 20px; border-color: var(--border-mid);">
-          <h4 style="margin-bottom: 8px; color: var(--cyan); display: flex; align-items: center; gap: 6px;"><i data-lucide="bar-chart-2" style="width: 16px; height: 16px;"></i> Dataset Metrics</h4>
-          <div style="font-size: 0.9rem; line-height: 1.5;">${formatInsightsSubsections(statsText)}</div>
+        <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 24px;">
+          <!-- Numeric Columns -->
+          <div class="card" style="flex: 1 1 calc(50% - 10px); min-width: 320px; padding: 18px; background: var(--bg-card); border: 1px solid var(--border-mid); box-sizing: border-box;">
+            <h4 style="margin: 0 0 12px 0; color: var(--cyan); font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="binary" style="width: 16px; height: 16px;"></i> Numeric Columns &amp; Distributions
+            </h4>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+      `;
+      if (numericCols.length > 0) {
+        numericCols.forEach(c => {
+          html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-low); padding-bottom: 8px; font-size: 0.85rem;">
+              <strong style="color: #fff;">${escHtml(c.col)}</strong>
+              <span style="color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.8rem; text-align: right;">${escHtml(c.stats)}</span>
+            </div>
+          `;
+        });
+      } else {
+        html += `<p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">None detected.</p>`;
+      }
+      html += `
+            </div>
+          </div>
+          
+          <!-- Categorical Columns -->
+          <div class="card" style="flex: 1 1 calc(50% - 10px); min-width: 320px; padding: 18px; background: var(--bg-card); border: 1px solid var(--border-mid); box-sizing: border-box;">
+            <h4 style="margin: 0 0 12px 0; color: var(--amber); font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="tags" style="width: 16px; height: 16px;"></i> Categorical Columns
+            </h4>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+      `;
+      if (categoricalCols.length > 0) {
+        categoricalCols.forEach(c => {
+          const statsLabel = c.stats ? `: ${c.stats}` : '';
+          html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-low); padding-bottom: 8px; font-size: 0.85rem;">
+              <strong style="color: #fff;">${escHtml(c.col)}</strong>
+              <span style="color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.8rem;">${escHtml(statsLabel)}</span>
+            </div>
+          `;
+        });
+      } else {
+        html += `<p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">None detected.</p>`;
+      }
+      html += `
+            </div>
+          </div>
         </div>
       `;
     }
@@ -2388,18 +2514,23 @@ function appendChatMsg(role, content, plotUrl = null) {
     ? '<i data-lucide="user" style="width: 16px; height: 16px;"></i>' 
     : '<i data-lucide="bot" style="width: 16px; height: 16px;"></i>';
 
-  // Format markdown-ish content: wrap code blocks
-  let formatted = escHtml(content)
-    .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
-    .replace(/`([^`]+)`/g, '<code style="background:var(--bg-surface);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:0.85em">$1</code>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n/g, '<br>');
+  let formatted = '';
+  // Try to use marked.js, fallback if CDN fails
+  if (typeof marked !== 'undefined') {
+    formatted = marked.parse(content);
+  } else {
+    formatted = escHtml(content)
+      .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
+      .replace(/`([^`]+)`/g, '<code style="background:var(--bg-surface);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:0.85em">$1</code>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n/g, '<br>');
+  }
 
   div.innerHTML = `
     <div class="chat-avatar">${avatar}</div>
-    <div class="chat-bubble">
+    <div class="chat-bubble markdown-body">
       ${formatted}
-      ${plotUrl ? `<img src="${plotUrl}" alt="Generated chart" />` : ''}
+      ${plotUrl ? `<img src="${plotUrl}" alt="Generated chart" style="margin-top:1rem; border-radius:12px; border:1px solid var(--border-color); max-width:100%; box-shadow: 0 4px 15px var(--shadow-color);" />` : ''}
     </div>`;
   els.chatMessages.appendChild(div);
   els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
@@ -2593,6 +2724,7 @@ function escHtml(str) {
   // Wire section switcher
   if (els.btnSectionChat) els.btnSectionChat.addEventListener('click', () => switchSection('chat'));
   if (els.btnSectionAgentic) els.btnSectionAgentic.addEventListener('click', () => switchSection('agentic'));
+  if (els.chatBackBtn) els.chatBackBtn.addEventListener('click', () => switchSection('agentic'));
 
   // Wire quick action buttons
   if (els.btnRenameColQuick) {

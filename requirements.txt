@@ -1,4 +1,4 @@
-# Multi-Agent Data Analysis System
+# Crewlyze
 # Web Platform — FastAPI + Pure Web UI (no Streamlit)
 # Install: pip install -r requirements.txt
 

@@ -1,7 +1,7 @@
-# Multi-Agent Data Analysis System with CrewAI
+# Crewlyze
 
 <p align="center">
-  <img src="assets/complete_workflow.svg" alt="Multi-Agent Data Analysis System Workflow" width="100%" />
+  <img src="assets/complete_workflow.svg" alt="Crewlyze Workflow" width="100%" />
 </p>
 
 <p align="center">
@@ -118,6 +118,6 @@ The system integrates a custom gateway supporting **13+ LLM providers** through 
 
 ---
 
-*Multi-Agent Data Analysis System*  
+*Crewlyze*  
 *Copyright (c) 2025 Sowmiyan S*  
 *Licensed under the MIT License*

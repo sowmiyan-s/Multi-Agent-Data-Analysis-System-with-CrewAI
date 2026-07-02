@@ -1,6 +1,6 @@
 @echo off
 echo ================================================================
-echo   Agentic Data Analyst - Web Platform
+echo   Crewlyze - Web Platform
 echo   FastAPI + Vanilla Web UI  (no Streamlit)
 echo ================================================================
 echo.
