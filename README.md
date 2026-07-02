@@ -1,3 +1,11 @@
+---
+title: Crewlyze
+emoji: 📊
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+app_port: 7860
+---
 # Crewlyze
 
 <p align="center">
