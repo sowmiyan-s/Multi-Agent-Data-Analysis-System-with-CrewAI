@@ -8,6 +8,11 @@ app_port: 7860
 ---
 # Crewlyze
 
+
+
+<p align="center">
+  <img src="assets/branding_image.png" alt="Transform Raw Datasets Into Insights With Agentic AI Analysts" width="100%" />
+</p>
 <p align="center">
   <img src="assets/stars.svg" alt="5-star rating" height="28" />
   &nbsp;&nbsp;
@@ -18,11 +23,6 @@ app_port: 7860
   <img src="assets/badge_ollama.svg" alt="ollama" height="28" />
 </p>
 
-## Branding
-
-<p align="center">
-  <img src="assets/branding_image.png" alt="Transform Raw Datasets Into Insights With Agentic AI Analysts" width="100%" />
-</p>
 
 ## Overview
 
