@@ -17,6 +17,7 @@
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="/style.css" />
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
 </head>
 
 <body>
@@ -25,8 +26,8 @@
   <aside id="sidebar" class="sidebar">
     <div class="sidebar-header">
       <div class="logo" id="sidebarLogo" style="cursor: pointer;" title="Go to Dashboard">
-        <span class="logo-icon">⬡</span>
-        <span class="logo-text">Crew<span class="logo-accent">lyze</span></span>
+        <img src="/assets/logo.png" alt="Crewlyze Logo" style="height: 32px; object-fit: contain;" />
+        <span class="logo-text" style="margin-left: 8px;">Crew<span class="logo-accent">lyze</span></span>
       </div>
       <button id="sidebarToggle" class="sidebar-toggle" title="Collapse sidebar">‹</button>
     </div>
@@ -45,6 +46,7 @@
         <option value="mistral">Mistral</option>
         <option value="huggingface">HuggingFace</option>
         <option value="ollama">Ollama (local)</option>
+        <option value="custom">Custom API (OpenAI Compatible)</option>
       </select>
 
       <label class="field-label">Model</label>
@@ -960,6 +962,27 @@
                 style="padding: 0 12px; font-size: 0.75rem; white-space: nowrap;">🔌 Test</button>
             </div>
             <div class="individual-status" id="statusOllama"
+              style="font-size: 0.72rem; margin-top: 4px; min-height: 14px;"></div>
+          </div>
+
+          <!-- Custom API URL & Key -->
+          <div class="setting-row">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label class="field-label" style="margin-bottom: 0; font-weight: 600;">Custom Base URL & Key</label>
+              <label
+                style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--text-secondary); cursor: pointer;">
+                <input type="checkbox" id="showCustom" class="setting-show-checkbox" checked /> Show in sidebar
+              </label>
+            </div>
+            <div class="key-input-wrap" style="display: flex; gap: 8px;">
+              <input type="text" id="urlCustom" class="field-input setting-key" placeholder="https://api.your-provider.com/v1"
+                style="flex: 1;" />
+              <input type="password" id="keyCustom" class="field-input setting-key" placeholder="Enter key…"
+                style="flex: 1;" />
+              <button class="btn-secondary test-individual-btn" data-provider="custom"
+                style="padding: 0 12px; font-size: 0.75rem; white-space: nowrap;">🔌 Test</button>
+            </div>
+            <div class="individual-status" id="statusCustom"
               style="font-size: 0.72rem; margin-top: 4px; min-height: 14px;"></div>
           </div>
         </div>

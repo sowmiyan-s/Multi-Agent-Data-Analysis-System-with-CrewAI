@@ -63,8 +63,8 @@ class NumberedCanvas(canvas.Canvas):
 
     def draw_page_decorations(self, page_count):
         self.saveState()
-        # Watermark "crewlyze" logo at top left corner of all pages in lowercase, bold, violet
-        self.setFillColor(colors.HexColor("#7c3aed"))
+        # Watermark "crewlyze" logo at top left corner of all pages in lowercase, bold, red
+        self.setFillColor(colors.HexColor("#ff252a"))
         self.setFont("Helvetica-Bold", 10)
         self.drawString(54, 752, "crewlyze")
 
@@ -347,8 +347,8 @@ def export_pdf(result: dict, filename: str = "") -> bytes:
     story = []
     styles = getSampleStyleSheet()
 
-    primary_color   = colors.HexColor("#1e1b4b")
-    secondary_color = colors.HexColor("#4f46e5")
+    primary_color   = colors.HexColor("#4a0404")
+    secondary_color = colors.HexColor("#ff252a")
     text_color      = colors.HexColor("#0f172a")
     muted_color     = colors.HexColor("#475569")
 

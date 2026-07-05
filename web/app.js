@@ -37,6 +37,8 @@ const MODEL_OPTIONS = {
   mistral:     ['mistral/mistral-tiny','mistral/mistral-small','mistral/mistral-medium','mistral/mistral-large-latest'],
   huggingface: ['huggingface/HuggingFaceH4/zephyr-7b-beta','huggingface/meta-llama/Llama-2-7b-chat-hf'],
   ollama:      ['ollama/llama3','ollama/mistral','ollama/gemma2'],
+  custom:      ['custom/model'],
+  custom:      ['gpt-3.5-turbo', 'gpt-4'],
   cohere:      ['cohere/command-r-plus', 'cohere/command-r', 'cohere/command-light'],
   together:    ['together_ai/meta-llama/Llama-3-70b-chat-hf', 'together_ai/meta-llama/Llama-3-8b-chat-hf', 'together_ai/mistralai/Mixtral-8x7B-Instruct-v0.1'],
   openrouter:  ['openrouter/google/gemma-2-9b-it', 'openrouter/meta-llama/llama-3-8b-instruct', 'openrouter/anthropic/claude-3.5-sonnet'],
@@ -105,6 +107,9 @@ const els = {
   keyMistral:               $('keyMistral'),
   keyHuggingface:           $('keyHuggingface'),
   urlOllama:                $('urlOllama'),
+  urlCustom:                $('urlCustom'),
+  keyCustom:                $('keyCustom'),
+  showCustom:               $('showCustom'),
   keyCohere:                $('keyCohere'),
   keyTogether:              $('keyTogether'),
   keyOpenrouter:            $('keyOpenrouter'),
@@ -431,7 +436,8 @@ const ALL_PROVIDERS = [
   { id: 'openrouter', name: 'OpenRouter' },
   { id: 'deepseek', name: 'DeepSeek' },
   { id: 'perplexity', name: 'Perplexity' },
-  { id: 'ollama', name: 'Ollama (local)' }
+  { id: 'ollama', name: 'Ollama (local)' },
+  { id: 'custom', name: 'Custom API' }
 ];
 
 const PROVIDER_TEST_MODELS = {
@@ -550,6 +556,9 @@ function populateSettingsModal() {
   els.keyDeepseek.value = localStorage.getItem('api_key_deepseek') || '';
   els.keyPerplexity.value = localStorage.getItem('api_key_perplexity') || '';
   els.urlOllama.value = localStorage.getItem('api_url_ollama') || 'http://localhost:11434';
+  els.urlCustom.value = localStorage.getItem('api_url_custom') || 'https://api.openai.com/v1';
+  els.keyCustom.value = localStorage.getItem('api_key_custom') || '';
+  // 'http://localhost:11434';
 
   const cooldown = localStorage.getItem('llm_cooldown') || '5';
   els.settingsCooldown.value = cooldown;
@@ -587,6 +596,8 @@ function saveSettingsModal() {
   localStorage.setItem('api_key_deepseek', els.keyDeepseek.value.trim());
   localStorage.setItem('api_key_perplexity', els.keyPerplexity.value.trim());
   localStorage.setItem('api_url_ollama', els.urlOllama.value.trim());
+  localStorage.setItem('api_url_custom', els.urlCustom.value.trim());
+  localStorage.setItem('api_key_custom', els.keyCustom.value.trim());
 
   const cooldown = els.settingsCooldown.value;
   localStorage.setItem('llm_cooldown', cooldown);

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crewlyze"
+version = "3.1.0"
+description = "Autonomous Multi-Agent Business Intelligence and Data Engineering Platform"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "Sowmiyan S" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "crewai",
+    "fastapi",
+    "uvicorn",
+    "pandas",
+    "reportlab",
+    "plotly",
+    "python-dotenv",
+    "requests"
+]
+
+[project.scripts]
+crewlyze = "uvicorn main:app --host 127.0.0.1 --port 8000"

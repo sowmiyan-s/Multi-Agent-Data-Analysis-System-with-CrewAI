@@ -9,10 +9,6 @@ app_port: 7860
 # Crewlyze
 
 <p align="center">
-  <img src="assets/complete_workflow.svg" alt="Crewlyze Workflow" width="100%" />
-</p>
-
-<p align="center">
   <img src="assets/stars.svg" alt="5-star rating" height="28" />
   &nbsp;&nbsp;
   <img src="assets/badge_crewai.svg" alt="crewai" height="28" />
@@ -22,11 +18,23 @@ app_port: 7860
   <img src="assets/badge_ollama.svg" alt="ollama" height="28" />
 </p>
 
+## Branding
+
+<p align="center">
+  <img src="assets/branding_image.png" alt="Transform Raw Datasets Into Insights With Agentic AI Analysts" width="100%" />
+</p>
+
+## Overview
+
 > **Autonomous Data Intelligence as a Service** | A premium, modular data-analyst pipeline powered by LLM-driven agents. Upload a CSV to initialize a workspace, chat with your dataset in real-time, execute custom schema modifications via natural language, and run a complete multi-agent pipeline to generate structured audits, correlation maps, and executive business summaries.
+
+<p align="center">
+  <img src="assets/complete_workflow.svg" alt="Crewlyze Workflow" width="100%" />
+</p>
 
 ---
 
-## 🚀 Dual-Engine Workspace
+## 🚀 Key Features
 
 Once a project is initialized, the system branches into two distinct, high-impact paths:
 

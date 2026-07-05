@@ -1188,6 +1188,11 @@ async def download_project_csv(project_id: str):
 web_dir = Path("web")
 web_dir.mkdir(exist_ok=True)
 
+# Mount assets (served at /assets)
+assets_dir = Path("assets")
+assets_dir.mkdir(exist_ok=True)
+app.mount("/assets", StaticFiles(directory="assets"), name="assets")
+
 # Mount statics (served at /app.js, /style.css, etc.)
 app.mount("/", StaticFiles(directory="web", html=True), name="web")
 

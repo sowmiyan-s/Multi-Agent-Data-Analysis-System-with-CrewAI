@@ -46,6 +46,11 @@ def get_llm_config() -> dict:
             "model":   "groq/llama-3.1-8b-instant",
             "api_key": current_llm_api_key.get() or os.getenv("GROQ_API_KEY"),
         },
+        "custom": {
+            "model":   os.getenv("LLM_MODEL", "custom/model"),
+            "api_key": current_llm_api_key.get() or os.getenv("CUSTOM_API_KEY", ""),
+            "base_url": os.getenv("CUSTOM_BASE_URL"),
+        },
         "openai": {
             "model":   "gpt-4o-mini",
             "api_key": current_llm_api_key.get() or os.getenv("OPENAI_API_KEY"),
@@ -105,7 +110,7 @@ def get_llm_config() -> dict:
 
     requires_key = {
         "groq", "openai", "anthropic", "huggingface", "mistral", "gemini", "nvidia", "minimax",
-        "cohere", "together", "openrouter", "deepseek", "perplexity"
+        "cohere", "together", "openrouter", "deepseek", "perplexity", "custom"
     }
     if provider in requires_key and not config.get("api_key"):
         raise ValueError(
@@ -147,6 +152,12 @@ def apply_runtime_llm_settings(
     env_key_name: str = "",
 ) -> None:
     """Inject provider/model/key into context variables before agent execution."""
+
+    if provider == "custom" and api_key and "|" in api_key:
+        parts = api_key.split("|", 1)
+        os.environ["CUSTOM_BASE_URL"] = parts[0]
+        api_key = parts[1]
+
     from config.context import current_llm_provider, current_llm_model, current_llm_api_key, current_llm_env_key_name
     current_llm_provider.set(provider)
     current_llm_model.set(model)
@@ -159,6 +170,12 @@ def validate_llm_connection(provider: str, model: str, api_key: str = "") -> dic
     Ping the configured LLM with a minimal prompt.
     Returns {"valid": bool, "message": str}.
     """
+
+    if provider == "custom" and api_key and "|" in api_key:
+        parts = api_key.split("|", 1)
+        os.environ["CUSTOM_BASE_URL"] = parts[0]
+        api_key = parts[1]
+
     if provider == "ollama":
         env_key_name = "OLLAMA_BASE_URL"
     elif provider in ("nvidia", "minimax"):
