@@ -123,7 +123,7 @@
         </button>
         
         <!-- Bell Notification Dropdown -->
-        <div id="notifDropdown" class="hidden" style="position: absolute; top: 44px; right: 0; width: 320px; background: var(--bg-elevated); border: 1px solid var(--border-mid); border-radius: var(--r-md); box-shadow: var(--shadow-lg); z-index: 500; display: flex; flex-direction: column; overflow: hidden; text-align: left;">
+        <div id="notifDropdown" class="hidden" style="position: absolute; top: 44px; right: 0; width: 320px; background: var(--bg-elevated); border: 1px solid var(--border-mid); border-radius: var(--r-md); box-shadow: var(--shadow-lg); z-index: 999999; display: flex; flex-direction: column; overflow: hidden; text-align: left;">
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border-low); background: rgba(255,255,255,0.01);">
             <span style="font-size: 0.85rem; font-weight: 700; color: #fff;">Notifications</span>
             <button id="clearNotifsBtn" style="background: transparent; border: none; font-size: 0.72rem; color: var(--text-secondary); cursor: pointer; text-decoration: underline;">Clear All</button>
@@ -139,12 +139,9 @@
 
     <!-- ─── LANDING / UPLOAD SCREEN ─── -->
     <section id="landingScreen" class="screen active" style="position: relative; overflow: hidden;">
-      <!-- Faded Background Logo -->
-      <div class="hero-bg-logo">
-        <img src="/assets/logo.png" alt="" />
-      </div>
-
+      
       <div class="landing-hero" style="position: relative; z-index: 1;">
+        <img src="/assets/logo.png" class="hero-bg-logo" alt="Background Logo" />
         <div class="hero-badge">✦ Powered by CrewAI Multi-Agent Pipeline</div>
         <h1 class="hero-title"><span class="gradient-text">Crewlyze</span></h1>
         <p class="hero-subtitle">Upload your CSV dataset and watch AI agents clean it, map relationships, generate visual charts, and give you clear business strategies in plain, simple words.</p>
@@ -1071,8 +1068,7 @@
   <div id="newProjectModal" class="modal-overlay hidden">
     <div class="modal-box">
       <div class="modal-header">
-        <h2><i data-lucide="plus-circle"></i>
-          Create New Project</h2>
+        <h2>Create New Project</h2>
         <button id="closeNewProjectModal" class="btn-icon">✕</button>
       </div>
       <div class="modal-body">
@@ -1113,8 +1109,7 @@
 
           <div id="uploadedFileActions" class="upload-actions hidden">
             <button id="wizardBackBtn" class="btn-secondary">Back</button>
-            <button id="startAnalysisBtn" class="btn-primary"><i data-lucide="play"></i>
-              Run Analysis</button>
+            <button id="startAnalysisBtn" class="btn-primary">Create Project</button>
           </div>
         </div>
 

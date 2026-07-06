@@ -1432,13 +1432,7 @@ async function handleFileSelected(file) {
     toast(`Project created: ${state.newProjectName || data.name}`, 'success');
     addMyProject(data.id);
     
-    // Auto-enter project workspace
-    resetWizardState();
-    await loadProjects();
-    const newProj = state.projects.find(p => p.id === data.id);
-    if (newProj) {
-      switchToProject(newProj);
-    }
+    // Do NOT auto-enter project here. Wait for user to click "Create Project" button.
   } catch (e) {
     toast('Project creation failed: ' + e.message, 'error');
   }
@@ -1512,10 +1506,18 @@ if (els.guideToApiBtn) {
   });
 }
 
-els.startAnalysisBtn.addEventListener('click', () => {
+els.startAnalysisBtn.addEventListener('click', async () => {
   if (!state.uploadedSession) { toast('No file uploaded yet.', 'warning'); return; }
-  if (!checkApiKeySet()) return;
-  openConfigModal();
+  
+  const modal = $('newProjectModal');
+  if (modal) modal.classList.add('hidden');
+  
+  resetWizardState();
+  await loadProjects();
+  const newProj = state.projects.find(p => p.id === state.uploadedSession);
+  if (newProj) {
+    switchToProject(newProj);
+  }
 });
 
 // ────────────────────────────────────────────────────────────────────────────

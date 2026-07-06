@@ -393,8 +393,16 @@ def generate_plotly_charts(csv_path: str, relations_text: str, max_rows: int = 5
         if x_col == y_col:
             continue
 
-        title = f"{x_col} vs {y_col}"
+        def clean_label(s: str) -> str:
+            return s.replace("_", " ").replace("-", " ").title()
+            
+        clean_x = clean_label(x_col)
+        clean_y = clean_label(y_col)
+        title = f"{clean_x} vs {clean_y}"
         color = _colors[len(figures) % len(_colors)]
+        
+        # We define labels for all px charts
+        lbls = {x_col: clean_x, y_col: clean_y}
 
         try:
             sample = df[[x_col, y_col]].dropna().head(2000)
@@ -406,6 +414,7 @@ def generate_plotly_charts(csv_path: str, relations_text: str, max_rows: int = 5
                 fig = px.scatter(
                     sample, x=x_col, y=y_col, title=title,
                     color_discrete_sequence=[color], opacity=0.75,
+                    labels=lbls
                 )
                 fig.update_traces(marker=dict(size=6, line=dict(width=0.5, color="rgba(255,255,255,0.3)")))
             elif "bar" in ptype:
@@ -416,34 +425,46 @@ def generate_plotly_charts(csv_path: str, relations_text: str, max_rows: int = 5
                     agg = sample.groupby(x_col)[y_col].mean().reset_index()
                 fig = px.bar(
                     agg.head(25), x=x_col, y=y_col, title=title,
-                    color_discrete_sequence=[color],
+                    color_discrete_sequence=[color], labels=lbls
                 )
             elif "line" in ptype:
                 fig = px.line(
                     sample.sort_values(x_col), x=x_col, y=y_col, title=title,
-                    color_discrete_sequence=[color],
+                    color_discrete_sequence=[color], labels=lbls
                 )
             elif "box" in ptype:
                 fig = px.box(
                     sample, x=x_col if not pd.api.types.is_numeric_dtype(df[x_col]) else None,
                     y=y_col, title=title,
-                    color_discrete_sequence=[color],
+                    color_discrete_sequence=[color], labels=lbls
                 )
             elif "hist" in ptype:
                 fig = px.histogram(
                     sample, x=x_col, nbins=30,
-                    title=f"Distribution of {x_col}",
-                    color_discrete_sequence=[color],
+                    title=f"Distribution of {clean_x}",
+                    color_discrete_sequence=[color], labels=lbls
                 )
             else:
                 # Default: scatter
                 fig = px.scatter(
                     sample, x=x_col, y=y_col, title=title,
-                    color_discrete_sequence=[color], opacity=0.75,
+                    color_discrete_sequence=[color], opacity=0.75, labels=lbls
                 )
+                
+            # Center title
+            fig.update_layout(title_x=0.5)
 
             fig.update_layout(**_dark)
             figures.append({"title": title, "fig": fig, "x": x_col, "y": y_col, "type": ptype})
+            
+            # Export to PNG for PDF (white theme)
+            try:
+                fig_white = fig
+                fig_white.update_layout(template="plotly_white", paper_bgcolor="white", plot_bgcolor="white", font=dict(color="black"))
+                png_path = os.path.join(output_dir, f"plotly_{x_col}_vs_{y_col}.png".replace("/", "_"))
+                fig_white.write_image(png_path, width=800, height=500)
+            except Exception as e:
+                print(f"[Plotly] Could not save PNG for {title}: {e}")
 
         except Exception as _chart_err:  # log but continue
             print(f"[Plotly] Skipping {title!r}: {_chart_err}")
