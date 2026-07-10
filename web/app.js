@@ -3359,10 +3359,7 @@ function escHtml(str) {
   }
   if (els.chatBackBtn) {
     els.chatBackBtn.addEventListener('click', () => {
-      const p = state.activeProject;
-      if (els.areaHub) els.areaHub.classList.add('hidden');
-      switchSection('agentic');
-      if (p) setBreadcrumb(p.name, 'Crew Analysis');
+      goToWorkspaceHub();
     });
   }
 

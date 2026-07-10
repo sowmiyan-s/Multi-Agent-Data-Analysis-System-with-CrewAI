@@ -802,12 +802,19 @@ def export_pdf(result: dict, filename: str = "") -> bytes:
                            textColor=C_CRIMSON_DARK, spaceAfter=6, leading=14)
         ),
         Paragraph(
-            "The autonomous data pipeline has successfully validated, cleaned, and evaluated the uploaded dataset. "
-            "To maximise return on these insights: "
-            "(1) prioritise the Actionable Strategy recommendations in the Insights section, "
-            "(2) address any Business Risks disclosed above, "
-            "(3) leverage the embedded charts in stakeholder presentations, and "
-            "(4) schedule a follow-up analysis cycle after implementing recommended changes.",
+            (
+                "Based on the analysis conducted on the dataset, the data pipeline has successfully validated "
+                "and evaluated the provided records. "
+                "The findings point towards the strategic recommendations detailed in the Insights section. "
+                "To maximize value from these insights, it is highly recommended to prioritize the outlined "
+                "Actionable Strategies, actively mitigate any Business Risks surfaced in this report, and leverage "
+                "the key visualizations to communicate findings with stakeholders."
+            ) if not strategic_text else (
+                "Based on the autonomous data analysis, several critical patterns were uncovered. "
+                f"Most notably, the primary insight reveals: {_escape(strategic_text.split('**Observation**:')[1].split('**Business Implication**:')[0].strip()[:250] if '**Observation**:' in strategic_text else strategic_text[:250])}... "
+                "To maximize business value, stakeholders must prioritize the Actionable Strategies detailed in the Insights section, "
+                "address the highlighted Business Risks, and use the provided data visualizations to drive informed decision-making."
+            ),
             ParagraphStyle("ConclBody", fontName="Helvetica", fontSize=9.5,
                            textColor=C_INK, leading=14.5)
         ),

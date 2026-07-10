@@ -349,7 +349,7 @@ def build_dataset_profile(csv_path: str, max_rows: int = 5000) -> str:
     return "\n".join(lines)
 
 
-def generate_plotly_charts(csv_path: str, relations_text: str, max_rows: int = 5000) -> list:
+def generate_plotly_charts(csv_path: str, relations_text: str, max_rows: int = 5000, output_dir: str = "") -> list:
     """Parse agent relation output and generate interactive Plotly figures.
 
     Replaces static matplotlib PNGs with zoomable, hoverable charts rendered
@@ -359,6 +359,7 @@ def generate_plotly_charts(csv_path: str, relations_text: str, max_rows: int = 5
         csv_path       : Path to the cleaned CSV file.
         relations_text : Raw text output from the relation agent.
         max_rows       : Row cap for chart data (default 5000 for rendering speed).
+        output_dir     : Directory where PNG snapshots are saved for PDF embedding.
 
     Returns:
         List of dicts: [{"title": str, "fig": plotly.graph_objs.Figure}, ...]
@@ -482,13 +483,15 @@ def generate_plotly_charts(csv_path: str, relations_text: str, max_rows: int = 5
             figures.append({"title": title, "fig": fig, "x": x_col, "y": y_col, "type": ptype})
             
             # Export to PNG for PDF (white theme)
-            try:
-                fig_white = fig
-                fig_white.update_layout(template="plotly_white", paper_bgcolor="white", plot_bgcolor="white", font=dict(color="black"))
-                png_path = os.path.join(output_dir, f"plotly_{x_col}_vs_{y_col}.png".replace("/", "_"))
-                fig_white.write_image(png_path, width=800, height=500)
-            except Exception as e:
-                print(f"[Plotly] Could not save PNG for {title}: {e}")
+            if output_dir:
+                try:
+                    import copy
+                    fig_white = copy.deepcopy(fig)
+                    fig_white.update_layout(template="plotly_white", paper_bgcolor="white", plot_bgcolor="white", font=dict(color="black"))
+                    png_path = os.path.join(output_dir, f"plotly_{x_col}_vs_{y_col}.png".replace("/", "_"))
+                    fig_white.write_image(png_path, width=800, height=500)
+                except Exception as e:
+                    print(f"[Plotly] Could not save PNG for {title}: {e}")
 
         except Exception as _chart_err:  # log but continue
             print(f"[Plotly] Skipping {title!r}: {_chart_err}")
