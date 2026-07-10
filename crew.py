@@ -852,6 +852,7 @@ def run_crew(
     plotly_charts = generate_plotly_charts(
         csv_path=str(cleaned_path),
         relations_text=relation_output,
+        output_dir=str(session_output_dir)
     )
     _progress("plotly", plotly_charts)
     stage_times["plotly"] = time.time() - start_plotly_stage
