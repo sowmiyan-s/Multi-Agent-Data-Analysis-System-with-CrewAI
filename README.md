@@ -419,10 +419,6 @@ A massive thank you to the brilliant minds building the future of autonomous dat
   </a>
 </p>
 
-*   👨‍💻 **Sowmiyan S** - *Lead Architect & Creator*
-*   👨‍💻 **Prithiv A.K** - *Core Contributor*
-*   👨‍💻 **Sebin S** - *Core Contributor*
-
 ---
 
 ## 💖 Sponsorship & Support
