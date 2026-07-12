@@ -1,4 +1,4 @@
-name: Node.js CI & Publish to NPM
+name: Node.js CI & Dual Publish to NPM and GitHub Packages
 
 on:
   push:
@@ -35,7 +35,7 @@ jobs:
         run: npm pack
 
   publish-npm:
-    name: Publish to NPM
+    name: Publish to npmjs.com
     needs: test-and-build
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
@@ -57,7 +57,50 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Publish to NPM Registry
+      - name: Publish to public npm
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-gpr:
+    name: Publish to GitHub Packages
+    needs: test-and-build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@sowmiyan-s'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Dynamically Update package.json name to Scoped Name
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+            pkg.name = '@sowmiyan-s/crewlyze';
+            pkg.publishConfig = { registry: 'https://npm.pkg.github.com' };
+            fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
+            console.log('Successfully updated package name to ' + pkg.name + ' for GitHub Packages publishing.');
+          "
+
+      - name: Publish to GitHub Packages
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

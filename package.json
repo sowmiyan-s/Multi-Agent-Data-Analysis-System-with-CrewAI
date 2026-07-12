@@ -3,6 +3,10 @@
   "version": "1.0.3",
   "description": "Autonomous Multi-Agent Business Intelligence and Data Engineering Platform",
   "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sowmiyan-s/Multi-Agent-Data-Analysis-System-with-CrewAI.git"
+  },
   "bin": {
     "crewlyze": "bin/crewlyze.js"
   },
