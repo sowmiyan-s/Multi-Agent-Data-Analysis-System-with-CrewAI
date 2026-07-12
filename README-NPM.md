@@ -121,12 +121,8 @@ The fastest, most seamless way to get Crewlyze running on Windows, macOS, or Lin
 - [Python](https://python.org) (3.10+)
 
 ```bash
-# 1. Install Crewlyze (it will automatically install globally)
-# Option A: Install from public npm registry (if published/auth is set up)
+# 1. Install Crewlyze globally from the NPM registry
 npm install -g crewlyze
-
-# Option B: Install directly from GitHub (No registry authentication required)
-npm install -g github:sowmiyan-s/Multi-Agent-Data-Analysis-System-with-CrewAI
 
 # 2. Launch the application from anywhere in your terminal
 crewlyze
