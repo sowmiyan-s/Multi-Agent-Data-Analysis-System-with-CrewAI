@@ -99,6 +99,33 @@ def make_pipeline(
     csv_path   = str((sessions_dir / session_id / "cleaned.csv").resolve())
     output_dir = str((outputs_dir_base / session_id).resolve())
 
+    meta_path = sessions_dir / session_id / "metadata.json"
+    clean_rules = []
+    if meta_path.exists():
+        try:
+            import json
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+                rules_str = meta.get("clean_rules", "")
+                if rules_str:
+                    clean_rules = [r.strip().lower() for r in rules_str.split(",") if r.strip()]
+        except Exception as e:
+            print(f"Error loading metadata inside pipeline: {e}")
+
+    rules_list = []
+    if "date_format" in clean_rules:
+        rules_list.append("- Standardize all date values in the dataset to YYYY-MM-DD format.")
+    if "fill_numeric" in clean_rules:
+        rules_list.append("- Impute/fill all missing numeric cell values automatically using their column medians.")
+    if "drop_duplicates" in clean_rules:
+        rules_list.append("- Drop duplicate row records across the entire dataset to ensure record uniqueness.")
+    if "strip_strings" in clean_rules:
+        rules_list.append("- Normalize string/text columns by trimming trailing/leading spaces and standardizing case where appropriate.")
+
+    rules_block = ""
+    if rules_list:
+        rules_block = "\n\nYou MUST write python code that implements the following specific cleaning rules:\n" + "\n".join(rules_list)
+
     from config.context import current_cooldown
     ctx_cooldown = current_cooldown.get()
     cooldown = int(ctx_cooldown) if ctx_cooldown is not None else int(os.getenv("API_COOLDOWN", "5"))
@@ -168,6 +195,7 @@ def make_pipeline(
         "Python cleaning code using 'Clean Dataset with Python Code' to fix them. "
         "Explain the business rationale of each cleaning step in the final report in a simple, clear, and readable manner, using easy-to-understand language and avoiding complex jargon."
         f"{coercion_block}"
+        f"{rules_block}"
         f"{deep_prompt}{profile_block}"
     )
 

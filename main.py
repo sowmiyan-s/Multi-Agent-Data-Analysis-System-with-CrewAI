@@ -93,6 +93,9 @@ log_stream_states = {}
 
 def clean_log_message(line: str, session_id: Optional[str] = None) -> Optional[str]:
     """Strip ANSI color codes, ignore noisy messages, and format thoughts/actions nicely."""
+    # Read dynamic log level from environment
+    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+
     # Strip ANSI colors/escapes
     line = ANSI_ESCAPE.sub('', line)
     
@@ -103,6 +106,14 @@ def clean_log_message(line: str, session_id: Optional[str] = None) -> Optional[s
 
     line_lower = stripped.lower()
     
+    # In ERROR mode, we only output explicit warnings, errors, or exceptions
+    if log_level == "ERROR":
+        if "warning" in line_lower or "error" in line_lower or "exception" in line_lower:
+            if "error" in line_lower or "exception" in line_lower:
+                return f"[Error] {stripped}"
+            return f"[Warning] {stripped}"
+        return None
+
     # System logs noise keywords to ignore
     noise_keywords = [
         "scriptruncontext",
@@ -125,8 +136,8 @@ def clean_log_message(line: str, session_id: Optional[str] = None) -> Optional[s
     if any(kw in line_lower for kw in noise_keywords):
         return None
 
-    # Handle stateful prompt block ignoring
-    if session_id:
+    # Handle stateful prompt block ignoring (skip prompt ignoring in DEBUG mode to see everything)
+    if log_level != "DEBUG" and session_id:
         if session_id not in log_stream_states:
             log_stream_states[session_id] = {"in_prompt": False}
         state = log_stream_states[session_id]
@@ -144,12 +155,19 @@ def clean_log_message(line: str, session_id: Optional[str] = None) -> Optional[s
             else:
                 return None  # Still ignoring prompt contents
 
-    # Ignore raw debug logs from crewai/langchain
-    if stripped.startswith("[DEBUG]:") or stripped.startswith("[INFO]:"):
-        if "working agent" in line_lower:
-            agent_name = stripped.split(":", 2)[-1].strip()
-            return f"[Agent] {agent_name} is active..."
-        return None
+    # Ignore raw debug logs from crewai/langchain if not in DEBUG mode
+    if log_level != "DEBUG":
+        if stripped.startswith("[DEBUG]:") or stripped.startswith("[INFO]:"):
+            if "working agent" in line_lower:
+                agent_name = stripped.split(":", 2)[-1].strip()
+                return f"[Agent] {agent_name} is active..."
+            return None
+    else:
+        # In DEBUG mode, keep and slightly prefix them
+        if stripped.startswith("[DEBUG]:"):
+            return f"[DEBUG] {stripped[8:].strip()}"
+        if stripped.startswith("[INFO]:"):
+            return f"[INFO] {stripped[7:].strip()}"
 
     # Format specific Langchain output structures for a premium look
     if "entering new crewagentexecutor chain" in line_lower:
@@ -217,7 +235,7 @@ os.environ["OTEL_SDK_DISABLED"]        = "true"
 app = FastAPI(
     title="Crewlyze API",
     description="Autonomous Multi-Agent Business Intelligence and Data Engineering Platform",
-    version="1.0.4"
+    version="1.0.5"
 )
 
 # Enable CORS for local development flexibility
@@ -258,6 +276,33 @@ OUTPUTS_DIR = Path(os.getenv("CREWLYZE_OUTPUTS_DIR", str(USER_HOME / "outputs"))
 
 for path in (DATA_DIR, SESSIONS_DIR, OUTPUTS_DIR):
     path.mkdir(exist_ok=True, parents=True)
+
+@app.on_event("startup")
+async def cleanup_stale_analyses():
+    """Scan all session metadata files on boot and reset any stale projects stuck in the running status."""
+    try:
+        if SESSIONS_DIR.exists() and SESSIONS_DIR.is_dir():
+            for session_dir in SESSIONS_DIR.iterdir():
+                if session_dir.is_dir():
+                    metadata_path = session_dir / "metadata.json"
+                    if metadata_path.exists():
+                        try:
+                            with open(metadata_path, "r", encoding="utf-8") as f:
+                                meta = json.load(f)
+                            if meta.get("status") == "running":
+                                meta["status"] = "failed"
+                                done_path = session_dir / "done.txt"
+                                if not done_path.exists():
+                                    with open(done_path, "w") as df:
+                                        df.write("done")
+                                with open(metadata_path, "w", encoding="utf-8") as f:
+                                    json.dump(meta, f, indent=2)
+                                print(f"Reset stale running session: {session_dir.name}")
+                        except Exception as e:
+                            print(f"Failed to reset metadata for {session_dir.name}: {e}")
+    except Exception as e:
+        print(f"Error during startup stale session cleanup: {e}")
+
 
 def is_safe_id(id_str: str) -> bool:
     """Ensure the ID is strictly alphanumeric (plus dashes/underscores) to prevent path traversal."""
@@ -406,6 +451,595 @@ def optimize_goal_grammar(goal: str, provider: str, model: str, api_key: str, en
     except Exception as e:
         print(f"Grammar optimization failed: {e}")
         return goal.strip()
+
+
+# ---------------------------------------------------------------------------
+# Automated Outbound Notifications Pipeline
+# ---------------------------------------------------------------------------
+
+def send_automated_email(session_id: str, results_data: dict, meta: dict, cfg: dict, subject: Optional[str] = None, send_pdf: bool = True, send_insights: bool = True):
+    try:
+        import smtplib
+        import re
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        from email.mime.base import MIMEBase
+        from email import encoders
+
+        smtp_host = cfg.get("SMTP_HOST")
+        smtp_port_val = cfg.get("SMTP_PORT", 587)
+        try:
+            smtp_port = int(smtp_port_val)
+        except Exception:
+            smtp_port = 587
+            
+        smtp_user = cfg.get("SMTP_USER")
+        smtp_password = cfg.get("SMTP_PASSWORD")
+        smtp_sender = cfg.get("SMTP_SENDER") or smtp_user
+        smtp_recipient = cfg.get("SMTP_RECIPIENT")
+        smtp_secure = parse_bool(cfg.get("SMTP_SECURE"))
+
+        if not smtp_host or not smtp_user or not smtp_recipient:
+            print("[Automation Email] SMTP parameters missing (host, username, or recipient). Skipping email.")
+            return
+
+        print(f"[Automation Email] Preparing automated report email to {smtp_recipient}...")
+
+        # Generate PDF bytes if requested
+        pdf_bytes = None
+        report_dict = {}
+        if send_pdf:
+            session_dir = get_safe_session_dir(session_id)
+            cleaned_csv = session_dir / "cleaned.csv"
+            df = read_csv_robust(cleaned_csv)
+            
+            report_dict = {
+                "dataframe":      df,
+                "cleaning_steps": results_data["cleaning_steps"],
+                "relations":      results_data["relations"],
+                "insights":       results_data["insights"],
+                "code":           results_data.get("code", ""),
+                "output_dir":     str(get_safe_output_dir(session_id)),
+                "report_title":   meta.get("report_title", meta.get("name", "Analysis Report")),
+                "goal":           meta.get("optimized_goal") or meta.get("goal") or "",
+            }
+            
+            _load_crew()
+            pdf_bytes = _export_pdf(report_dict)
+
+        # Build email
+        msg = MIMEMultipart()
+        msg['From'] = smtp_sender
+        msg['To'] = smtp_recipient
+        
+        email_title = subject.strip() if subject and subject.strip() else f"📊 Crewlyze Automated Report: {meta.get('name', 'Analysis Report')}"
+        msg['Subject'] = email_title
+
+        # Body
+        body = f"Hello,\n\nYour automated data analysis run for project \"{meta.get('name')}\" has completed successfully.\n"
+        if send_pdf:
+            body += "\nPlease find the executive PDF summary report attached to this email.\n"
+            
+        if send_insights:
+            insights_txt = results_data.get("insights", "").strip()
+            if insights_txt:
+                body += f"\n--- Key Strategic Insights ---\n\n{insights_txt}\n"
+                
+        body += "\nBest regards,\nCrewlyze Swarm\n"
+        msg.attach(MIMEText(body, 'plain'))
+
+        # Attachment
+        if send_pdf and pdf_bytes:
+            part = MIMEBase('application', "octet-stream")
+            part.set_payload(pdf_bytes)
+            encoders.encode_base64(part)
+            clean_title = report_dict.get('report_title', meta.get('name', 'report'))
+            filename = re.sub(r"[^a-zA-Z0-9_-]", "_", clean_title.lower())[:60] or f"report_{session_id}"
+            part.add_header('Content-Disposition', f'attachment; filename="{filename}.pdf"')
+            msg.attach(part)
+
+        # Connect and send
+        server = None
+        if smtp_port == 465 or smtp_secure:
+            try:
+                server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=15)
+            except Exception as ssl_err:
+                print(f"[Automation Email] SMTP_SSL connection failed, trying standard SMTP: {ssl_err}")
+                
+        if server is None:
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=15)
+            try:
+                server.starttls()
+            except Exception as tls_err:
+                print(f"[Automation Email] STARTTLS failed: {tls_err}")
+        
+        if smtp_user and smtp_password:
+            server.login(smtp_user, smtp_password)
+            
+        recipients = [r.strip() for r in smtp_recipient.split(",") if r.strip()]
+        server.sendmail(smtp_sender, recipients, msg.as_string())
+        server.quit()
+        print(f"[Automation Email] Automated report email sent successfully to {smtp_recipient}.")
+    except Exception as e:
+        print(f"[Automation Email] Failed to send automated email: {e}")
+
+def send_automated_slack(session_id: str, results_data: dict, meta: dict, cfg: dict):
+    try:
+        import urllib.request
+        import json
+        
+        webhook_url = cfg.get("SLACK_WEBHOOK_URL")
+        if not webhook_url:
+            print("[Automation Slack] Slack webhook URL missing. Skipping Slack post.")
+            return
+
+        send_summary = parse_bool(cfg.get("SLACK_SEND_SUMMARY", True))
+        if not send_summary:
+            print("[Automation Slack] Slack summary card disabled. Skipping Slack post.")
+            return
+
+        print("[Automation Slack] Posting automated summary to Slack...")
+
+        title = meta.get("report_title", meta.get("name", "Crewlyze Executive Analysis"))
+        rows = results_data.get("rows_count", 0)
+        cols = results_data.get("cols_count", 0)
+        
+        # Parse observations out of the insights markdown
+        insights_section = results_data.get("insights", "")
+        observations = []
+        if isinstance(insights_section, str):
+            for line in insights_section.split("\n"):
+                if "observation:" in line.lower() or "**observation**:" in line.lower():
+                    clean_obs = re.sub(r'^\s*[-*]?\s*\d*\.?\s*\**Observation\**:\s*', '', line, flags=re.IGNORECASE)
+                    observations.append(clean_obs.strip())
+        elif isinstance(insights_section, dict):
+            observations = insights_section.get("observations", [])
+            
+        obs_text = "\n".join([f"• {o}" for o in observations[:3]]) if observations else "Insights generated successfully."
+        
+        blocks = [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": "📊 Automated Crewlyze Analysis Completed",
+                    "emoji": True
+                }
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Project Name:* {meta.get('name')}\n*Report Title:* {title}\n*Dataset:* `{rows} rows x {cols} columns`"
+                }
+            },
+            {
+                "type": "divider"
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Key Observations:*\n{obs_text}"
+                }
+            },
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "plain_text",
+                        "text": f"Session ID: {session_id} | Powered by CrewAI Multi-Agent Swarm",
+                        "emoji": True
+                    }
+                ]
+            }
+        ]
+        
+        payload = {"blocks": blocks}
+        req = urllib.request.Request(
+            webhook_url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_body = response.read().decode("utf-8")
+        print(f"[Automation Slack] Automated Slack message posted successfully: {res_body}")
+    except Exception as e:
+        print(f"[Automation Slack] Failed to post automated Slack message: {e}")
+
+def send_automated_webhook(session_id: str, results_data: dict, meta: dict, cfg: dict):
+    try:
+        import requests
+        import json
+        
+        webhook_url = cfg.get("OUTBOUND_WEBHOOK_URL")
+        if not webhook_url:
+            print("[Automation Webhook] Outbound Webhook URL missing. Skipping Webhook post.")
+            return
+
+        send_json = parse_bool(cfg.get("WEBHOOK_SEND_JSON", True))
+        attach_pdf = parse_bool(cfg.get("WEBHOOK_ATTACH_PDF", True))
+
+        print(f"[Automation Webhook] Dispatched automated webhook payload to {webhook_url}...")
+
+        payload = {
+            "event": "analysis_completed",
+            "timestamp": time.time() * 1000,
+            "session_id": session_id,
+            "project_name": meta.get("name"),
+            "report_title": meta.get("report_title"),
+            "status": "success",
+        }
+        
+        if send_json:
+            payload["resultsSummary"] = {
+                "rows_count": results_data.get("rows_count", 0),
+                "cols_count": results_data.get("cols_count", 0),
+                "numeric_count": results_data.get("numeric_count", 0),
+                "cat_count": results_data.get("cat_count", 0),
+                "cleaning_steps": results_data.get("cleaning_steps", []),
+                "relations": results_data.get("relations", []),
+                "insights": results_data.get("insights", "")
+            }
+            
+        files = {}
+        opened_files = []
+        
+        session_dir = get_safe_session_dir(session_id)
+        output_dir = get_safe_output_dir(session_id)
+        
+        if attach_pdf:
+            pdf_path = output_dir / f"{session_id}_report.pdf"
+            if not pdf_path.exists():
+                try:
+                    cleaned_csv = session_dir / "cleaned.csv"
+                    df = read_csv_robust(cleaned_csv)
+                    report_dict = {
+                        "dataframe":      df,
+                        "cleaning_steps": results_data["cleaning_steps"],
+                        "relations":      results_data["relations"],
+                        "insights":       results_data["insights"],
+                        "code":           results_data.get("code", ""),
+                        "output_dir":     str(output_dir),
+                        "report_title":   meta.get("report_title", meta.get("name", "Analysis Report")),
+                        "goal":           meta.get("optimized_goal") or meta.get("goal") or "",
+                    }
+                    _load_crew()
+                    pdf_bytes = _export_pdf(report_dict)
+                    with open(pdf_path, "wb") as pf:
+                        pf.write(pdf_bytes)
+                except Exception as pdf_err:
+                    print(f"[Webhook Outbound] Failed to pre-compile PDF attachment: {pdf_err}")
+            
+            if pdf_path.exists():
+                fp = open(pdf_path, "rb")
+                opened_files.append(fp)
+                files["file"] = (f"report_{session_id}.pdf", fp, "application/pdf")
+                
+        try:
+            if files:
+                payload_data = {"payload_json": json.dumps(payload)}
+                response = requests.post(webhook_url, data=payload_data, files=files, timeout=15)
+            else:
+                response = requests.post(webhook_url, json=payload, timeout=15)
+            response.raise_for_status()
+            print(f"[Automation Webhook] Automated custom Webhook completed successfully.")
+        finally:
+            for fp in opened_files:
+                fp.close()
+    except Exception as e:
+        print(f"[Automation Webhook] Failed to trigger automated custom Webhook: {e}")
+
+def send_automated_discord(session_id: str, results_data: dict, meta: dict, cfg: dict):
+    try:
+        import requests
+        import json
+        
+        username = cfg.get("DISCORD_USERNAME", "").strip()
+        avatar_url = cfg.get("DISCORD_AVATAR_URL", "").strip() or "https://raw.githubusercontent.com/sowmiyan-s/Multi-Agent-Data-Analysis-System-with-CrewAI/main/assets/chat_logo.png"
+        embed_color_hex = cfg.get("DISCORD_EMBED_COLOR", "#5865F2").strip()
+        mention = cfg.get("DISCORD_MENTION_ROLE", "").strip()
+        include_warnings = parse_bool(cfg.get("DISCORD_TOGGLE_WARNINGS", True))
+        include_stats = parse_bool(cfg.get("DISCORD_TOGGLE_STATS", True))
+        send_summary = parse_bool(cfg.get("DISCORD_SEND_SUMMARY", True))
+        attach_pdf = parse_bool(cfg.get("DISCORD_ATTACH_PDF", True))
+        attach_charts = parse_bool(cfg.get("DISCORD_ATTACH_CHARTS", False))
+
+        color_val = 5814783  # default blurple
+        if embed_color_hex.startswith("#"):
+            try:
+                color_val = int(embed_color_hex.lstrip("#"), 16)
+            except Exception:
+                pass
+
+        # Check if separate channels are active
+        separate_channels = parse_bool(cfg.get("DISCORD_SEPARATE_CHANNELS"))
+        
+        if separate_channels:
+            print("[Automation Discord] Posting to separate channels...")
+            
+            def post_sub_report(webhook_url, content_title, text_content, fields=None, force_pdf=False, force_charts=False):
+                if not webhook_url:
+                    return
+                sub_embed = {
+                    "title": content_title,
+                    "color": color_val,
+                    "fields": fields or [],
+                    "footer": {
+                        "text": f"Session ID: {session_id} | Powered by Crewlyze & CrewAI"
+                    }
+                }
+                sub_payload = {}
+                if send_summary:
+                    sub_payload["embeds"] = [sub_embed]
+                if text_content:
+                    sub_payload["content"] = text_content
+                if username:
+                    sub_payload["username"] = username
+                if avatar_url:
+                    sub_payload["avatar_url"] = avatar_url
+                if mention:
+                    sub_payload["content"] = f"{mention} - {content_title} Complete!\n" + sub_payload.get("content", "")
+
+                sub_files = {}
+                sub_opened_files = []
+                session_dir = get_safe_session_dir(session_id)
+                output_dir = get_safe_output_dir(session_id)
+
+                if force_pdf and attach_pdf:
+                    pdf_path = output_dir / f"{session_id}_report.pdf"
+                    if not pdf_path.exists():
+                        try:
+                            cleaned_csv = session_dir / "cleaned.csv"
+                            df = read_csv_robust(cleaned_csv)
+                            report_dict = {
+                                "dataframe":      df,
+                                "cleaning_steps": results_data["cleaning_steps"],
+                                "relations":      results_data["relations"],
+                                "insights":       results_data["insights"],
+                                "code":           results_data.get("code", ""),
+                                "output_dir":     str(output_dir),
+                                "report_title":   meta.get("report_title", meta.get("name", "Analysis Report")),
+                                "goal":           meta.get("optimized_goal") or meta.get("goal") or "",
+                            }
+                            _load_crew()
+                            pdf_bytes = _export_pdf(report_dict)
+                            with open(pdf_path, "wb") as pf:
+                                pf.write(pdf_bytes)
+                        except Exception as pdf_err:
+                            print(f"[Discord Webhook] Failed to pre-compile PDF attachment: {pdf_err}")
+                    
+                    if pdf_path.exists():
+                        fp = open(pdf_path, "rb")
+                        sub_opened_files.append(fp)
+                        sub_files["file"] = (f"report_{session_id}.pdf", fp, "application/pdf")
+
+                if force_charts and attach_charts and output_dir.exists():
+                    png_charts = sorted(list(output_dir.glob("*.png")), key=lambda x: x.stat().st_mtime)
+                    for idx, chart_path in enumerate(png_charts[:3]):
+                        fp = open(chart_path, "rb")
+                        sub_opened_files.append(fp)
+                        sub_files[f"chart_{idx}"] = (chart_path.name, fp, "image/png")
+
+                try:
+                    if sub_files:
+                        payload_data = {"payload_json": json.dumps(sub_payload)}
+                        response = requests.post(webhook_url, data=payload_data, files=sub_files, timeout=15)
+                    else:
+                        response = requests.post(webhook_url, json=sub_payload, timeout=15)
+                    response.raise_for_status()
+                    print(f"[Automation Discord] Sub-report '{content_title}' posted successfully.")
+                except Exception as post_err:
+                    print(f"[Automation Discord] Failed to post sub-report '{content_title}': {post_err}")
+                finally:
+                    for fp in sub_opened_files:
+                        fp.close()
+
+            # 1. Data Cleaning
+            if parse_bool(cfg.get("DISCORD_CLEANING_ENABLED")) and results_data.get("cleaning_steps"):
+                clean_txt = results_data["cleaning_steps"]
+                if len(clean_txt) > 1024:
+                    clean_txt = clean_txt[:1000] + "..."
+                fields = [{"name": "Cleaning Audit Trail", "value": clean_txt, "inline": False}]
+                post_sub_report(cfg.get("DISCORD_CLEANING_URL"), "🧹 Data Cleaning Report", "", fields)
+
+            # 2. Relationship Mapper
+            if parse_bool(cfg.get("DISCORD_RELATIONS_ENABLED")) and results_data.get("relations"):
+                rel_txt = results_data["relations"]
+                if len(rel_txt) > 1024:
+                    rel_txt = rel_txt[:1000] + "..."
+                fields = [{"name": "Relationship Map Insights", "value": rel_txt, "inline": False}]
+                post_sub_report(cfg.get("DISCORD_RELATIONS_URL"), "🔗 Relation Mapper Report", "", fields)
+
+            # 3. Business Analysis
+            if parse_bool(cfg.get("DISCORD_INSIGHTS_ENABLED")) and results_data.get("insights"):
+                ins_txt = results_data["insights"]
+                if len(ins_txt) > 1024:
+                    ins_txt = ins_txt[:1000] + "..."
+                fields = [{"name": "Strategic Business Insights", "value": ins_txt, "inline": False}]
+                post_sub_report(cfg.get("DISCORD_INSIGHTS_URL"), "💡 Business Analysis Report", "", fields)
+
+            # 4. Visualization Graphs
+            if parse_bool(cfg.get("DISCORD_VISUALIZATION_ENABLED")):
+                fields = [{"name": "Charts Overview", "value": f"Generated {len(results_data.get('png_charts', []))} analytical charts.", "inline": False}]
+                post_sub_report(cfg.get("DISCORD_VISUALIZATION_URL"), "📊 Visualization Report", "", fields, force_pdf=True, force_charts=True)
+
+            return
+            
+        webhook_url = cfg.get("DISCORD_WEBHOOK_URL")
+        if not webhook_url:
+            print("[Automation Discord] Discord webhook URL missing. Skipping Discord post.")
+            return
+
+        print("[Automation Discord] Posting automated summary to Discord...")
+
+        title = meta.get("report_title", meta.get("name", "Crewlyze Executive Analysis"))
+        rows = results_data.get("rows_count", 0)
+        cols = results_data.get("cols_count", 0)
+        
+        # Parse observations & warnings out of the insights markdown
+        insights_section = results_data.get("insights", "")
+        observations = []
+        warnings_found = []
+        if isinstance(insights_section, str):
+            for line in insights_section.split("\n"):
+                if "observation:" in line.lower() or "**observation**:" in line.lower():
+                    clean_obs = re.sub(r'^\s*[-*]?\s*\d*\.?\s*\**Observation\**:\s*', '', line, flags=re.IGNORECASE)
+                    observations.append(clean_obs.strip())
+                elif "warning" in line.lower() or "alert" in line.lower() or "risk" in line.lower():
+                    clean_warn = re.sub(r'^\s*[-*]?\s*\d*\.?\s*\**Warning\**:\s*', '', line, flags=re.IGNORECASE)
+                    warnings_found.append(clean_warn.strip())
+        elif isinstance(insights_section, dict):
+            observations = insights_section.get("observations", [])
+            warnings_found = insights_section.get("warnings", [])
+            
+        obs_text = "\n".join([f"• {o}" for o in observations[:3]]) if observations else "Insights generated successfully."
+        
+        embed_fields = [
+            {
+                "name": "Project Name",
+                "value": meta.get("name", "Unnamed Project"),
+                "inline": True
+            },
+            {
+                "name": "Report Title",
+                "value": title,
+                "inline": True
+            }
+        ]
+        
+        if include_stats:
+            embed_fields.append({
+                "name": "Dataset Profile",
+                "value": f"`{rows} rows x {cols} columns`",
+                "inline": True
+            })
+            
+        embed_fields.append({
+            "name": "Key Observations",
+            "value": obs_text,
+            "inline": False
+        })
+        
+        if include_warnings and warnings_found:
+            warn_text = "\n".join([f"⚠️ {w}" for w in warnings_found[:2]])
+            embed_fields.append({
+                "name": "Surfaced Warnings & Risks",
+                "value": warn_text,
+                "inline": False
+            })
+            
+        embed = {
+            "title": "📊 Crewlyze Analysis Completed",
+            "color": color_val,
+            "fields": embed_fields,
+            "footer": {
+                "text": f"Session ID: {session_id} | Powered by Crewlyze & CrewAI"
+            }
+        }
+        
+        payload = {}
+        if send_summary:
+            payload["embeds"] = [embed]
+        if username:
+            payload["username"] = username
+        if avatar_url:
+            payload["avatar_url"] = avatar_url
+        if mention:
+            payload["content"] = f"{mention} - Analysis Completed!"
+            
+        # Deliverables attachment files
+        files = {}
+        opened_files = []
+        
+        session_dir = get_safe_session_dir(session_id)
+        output_dir = get_safe_output_dir(session_id)
+        
+        if attach_pdf:
+            pdf_path = output_dir / f"{session_id}_report.pdf"
+            if not pdf_path.exists():
+                try:
+                    cleaned_csv = session_dir / "cleaned.csv"
+                    df = read_csv_robust(cleaned_csv)
+                    report_dict = {
+                        "dataframe":      df,
+                        "cleaning_steps": results_data["cleaning_steps"],
+                        "relations":      results_data["relations"],
+                        "insights":       results_data["insights"],
+                        "code":           results_data.get("code", ""),
+                        "output_dir":     str(output_dir),
+                        "report_title":   meta.get("report_title", meta.get("name", "Analysis Report")),
+                        "goal":           meta.get("optimized_goal") or meta.get("goal") or "",
+                    }
+                    _load_crew()
+                    pdf_bytes = _export_pdf(report_dict)
+                    with open(pdf_path, "wb") as pf:
+                        pf.write(pdf_bytes)
+                except Exception as pdf_err:
+                    print(f"[Discord Webhook] Failed to pre-compile PDF attachment: {pdf_err}")
+            
+            if pdf_path.exists():
+                fp = open(pdf_path, "rb")
+                opened_files.append(fp)
+                files["file"] = (f"report_{session_id}.pdf", fp, "application/pdf")
+                
+        if attach_charts and output_dir.exists():
+            png_charts = sorted(list(output_dir.glob("*.png")), key=lambda x: x.stat().st_mtime)
+            for idx, chart_path in enumerate(png_charts[:3]):
+                fp = open(chart_path, "rb")
+                opened_files.append(fp)
+                files[f"chart_{idx}"] = (chart_path.name, fp, "image/png")
+                
+        try:
+            if files:
+                payload_data = {"payload_json": json.dumps(payload)}
+                response = requests.post(webhook_url, data=payload_data, files=files, timeout=15)
+            else:
+                response = requests.post(webhook_url, json=payload, timeout=15)
+            response.raise_for_status()
+            print(f"[Automation Discord] Automated Discord message posted successfully.")
+        finally:
+            for fp in opened_files:
+                fp.close()
+    except Exception as e:
+        print(f"[Automation Discord] Failed to post automated Discord message: {e}")
+
+def run_automation_pipeline(session_id: str, results_data: dict):
+    try:
+        cfg_path = get_local_config_path()
+        if not cfg_path.exists():
+            return
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+            
+        meta = get_project_metadata(session_id)
+        
+        # Automated email is disabled as per user request to be manual-only via "Email Report" button
+        # if parse_bool(cfg.get("AUTOMATION_EMAIL_ENABLED")):
+        #     try:
+        #         send_automated_email(session_id, results_data, meta, cfg)
+        #     except Exception as e:
+        #         print(f"[Automation Hub] Email runner error: {e}")
+            
+        if parse_bool(cfg.get("AUTOMATION_SLACK_ENABLED")):
+            try:
+                send_automated_slack(session_id, results_data, meta, cfg)
+            except Exception as e:
+                print(f"[Automation Hub] Slack runner error: {e}")
+
+        if parse_bool(cfg.get("AUTOMATION_DISCORD_ENABLED")):
+            try:
+                send_automated_discord(session_id, results_data, meta, cfg)
+            except Exception as e:
+                print(f"[Automation Hub] Discord runner error: {e}")
+            
+        if parse_bool(cfg.get("AUTOMATION_WEBHOOK_ENABLED")):
+            try:
+                send_automated_webhook(session_id, results_data, meta, cfg)
+            except Exception as e:
+                print(f"[Automation Hub] Webhook runner error: {e}")
+    except Exception as e:
+        print(f"[Automation Hub] Pipeline dispatch error: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -564,6 +1198,12 @@ def run_crew_in_background(
                 except Exception:
                     pass
 
+                # Trigger outbound automations (Email, Slack, Webhook)
+                try:
+                    run_automation_pipeline(session_id, serializable_result)
+                except Exception as aut_err:
+                    print(f"[Automation Error] Outbound automations failed: {aut_err}")
+
             except Exception as e:
                 import traceback
                 print(f"\nPipeline failed: {e}", file=sys.stderr)
@@ -600,7 +1240,17 @@ async def upload_file(file: UploadFile = File(...)):
     session_dir = get_safe_session_dir(session_id)
     session_dir.mkdir(parents=True, exist_ok=True)
 
-    file_path = session_dir / "original_upload.csv"
+    filename_lower = file.filename.lower()
+    is_excel = filename_lower.endswith((".xlsx", ".xls"))
+    is_sqlite = filename_lower.endswith((".db", ".sqlite", ".sqlite3"))
+
+    if is_excel:
+        file_path = session_dir / "uploaded_file.xlsx"
+    elif is_sqlite:
+        file_path = session_dir / "uploaded_file.db"
+    else:
+        file_path = session_dir / "original_upload.csv"
+
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
@@ -609,16 +1259,47 @@ async def upload_file(file: UploadFile = File(...)):
     with open(log_path, "w") as f:
         f.write("Dataset uploaded successfully.\n")
 
+    proj_name = file.filename.rsplit('.', 1)[0].replace('_', ' ').replace('-', ' ').title()
+    status = "idle"
+    sheets = []
+    tables = []
+
+    if is_excel:
+        try:
+            xl = pd.ExcelFile(file_path)
+            sheets = xl.sheet_names
+            status = "awaiting_sheet"
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to read Excel workbook: {e}")
+    elif is_sqlite:
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(file_path))
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = [row[0] for row in cursor.fetchall()]
+            conn.close()
+            status = "awaiting_table"
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to read SQLite tables: {e}")
+    else:
+        # standard CSV validation
+        try:
+            df = read_csv_robust(file_path)
+            # save back formatted to make sure it's UTF-8 comma-separated
+            df.to_csv(file_path, index=False)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to read CSV: {e}")
+
     # Save default project metadata
     try:
-        proj_name = file.filename.rsplit('.', 1)[0].replace('_', ' ').replace('-', ' ').title()
         meta = {
             "id": session_id,
             "name": proj_name,
             "filename": file.filename,
             "size": file_path.stat().st_size,
             "created_at": time.time() * 1000,
-            "status": "idle"
+            "status": status
         }
         save_project_metadata(session_id, meta)
     except Exception:
@@ -627,8 +1308,217 @@ async def upload_file(file: UploadFile = File(...)):
     return {
         "session_id": session_id,
         "filename": file.filename,
-        "size": file_path.stat().st_size
+        "size": file_path.stat().st_size,
+        "type": "excel" if is_excel else "sqlite" if is_sqlite else "csv",
+        "sheets": sheets,
+        "tables": tables
     }
+
+
+@app.post("/api/upload/select-sheet")
+async def select_excel_sheet(session_id: str = Form(...), sheet_name: str = Form(...)):
+    session_dir = get_safe_session_dir(session_id)
+    xlsx_path = session_dir / "uploaded_file.xlsx"
+    if not xlsx_path.exists():
+        raise HTTPException(status_code=400, detail="Excel upload not found.")
+    try:
+        df = pd.read_excel(xlsx_path, sheet_name=sheet_name)
+        csv_path = session_dir / "original_upload.csv"
+        df.to_csv(csv_path, index=False)
+        
+        meta = get_project_metadata(session_id)
+        meta["status"] = "idle"
+        meta["filename"] = f"{meta['filename']} [{sheet_name}]"
+        meta["size"] = csv_path.stat().st_size
+        save_project_metadata(session_id, meta)
+        
+        return {"status": "success", "session_id": session_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load sheet: {e}")
+
+
+@app.post("/api/upload/select-table")
+async def select_sqlite_table(session_id: str = Form(...), table_name: str = Form(...)):
+    session_dir = get_safe_session_dir(session_id)
+    db_path = session_dir / "uploaded_file.db"
+    if not db_path.exists():
+        raise HTTPException(status_code=400, detail="Database upload not found.")
+    try:
+        import sqlite3
+        conn = sqlite3.connect(str(db_path))
+        df = pd.read_sql_query(f"SELECT * FROM `{table_name}`", conn)
+        conn.close()
+        
+        csv_path = session_dir / "original_upload.csv"
+        df.to_csv(csv_path, index=False)
+        
+        meta = get_project_metadata(session_id)
+        meta["status"] = "idle"
+        meta["filename"] = f"{meta['filename']} [{table_name}]"
+        meta["size"] = csv_path.stat().st_size
+        save_project_metadata(session_id, meta)
+        
+        return {"status": "success", "session_id": session_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load table: {e}")
+
+
+@app.post("/api/query-sql")
+async def query_sql_dataset(session_id: str = Form(...), sql_query: str = Form(...)):
+    session_dir = get_safe_session_dir(session_id)
+    csv_path = session_dir / "cleaned.csv"
+    if not csv_path.exists():
+        csv_path = session_dir / "original_upload.csv"
+    if not csv_path.exists():
+        raise HTTPException(status_code=400, detail="Dataset not found.")
+        
+    try:
+        import sqlite3
+        df = read_csv_robust(csv_path)
+        conn = sqlite3.connect(":memory:")
+        df.to_sql("dataset", conn, index=False)
+        
+        res_df = pd.read_sql_query(sql_query, conn)
+        conn.close()
+        
+        res_df = res_df.replace([float('inf'), float('-inf')], float('nan')).fillna("")
+        results = res_df.head(100).to_dict(orient="records")
+        columns = list(res_df.columns)
+        
+        return {
+            "success": True,
+            "columns": columns,
+            "results": results,
+            "total_count": len(res_df)
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/dataset-diff")
+async def get_dataset_diff(session_id: str):
+    session_dir = get_safe_session_dir(session_id)
+    orig_path = session_dir / "original_upload.csv"
+    clean_path = session_dir / "cleaned.csv"
+    
+    if not orig_path.exists():
+        raise HTTPException(status_code=400, detail="Original dataset upload not found.")
+        
+    orig_df = read_csv_robust(orig_path)
+    
+    if not clean_path.exists():
+        return {
+            "cleaned": False,
+            "original_rows": len(orig_df),
+            "original_cols": len(orig_df.columns),
+            "original_columns": list(orig_df.columns)
+        }
+        
+    clean_df = read_csv_robust(clean_path)
+    
+    rows_dropped = len(orig_df) - len(clean_df)
+    cols_changed = []
+    
+    for col in orig_df.columns:
+        if col not in clean_df.columns:
+            cols_changed.append({"column": col, "type": "dropped"})
+            
+    for col in clean_df.columns:
+        if col not in orig_df.columns:
+            cols_changed.append({"column": col, "type": "added"})
+        elif orig_df[col].dtype != clean_df[col].dtype:
+            cols_changed.append({
+                "column": col, 
+                "type": "type_changed", 
+                "from": str(orig_df[col].dtype), 
+                "to": str(clean_df[col].dtype)
+            })
+            
+    return {
+        "cleaned": True,
+        "original_rows": len(orig_df),
+        "original_cols": len(orig_df.columns),
+        "cleaned_rows": len(clean_df),
+        "cleaned_cols": len(clean_df.columns),
+        "rows_dropped": rows_dropped,
+        "changes": cols_changed
+    }
+
+
+@app.post("/api/share/slack")
+async def share_report_to_slack(session_id: str = Form(...), webhook_url: str = Form(...)):
+    session_dir = get_safe_session_dir(session_id)
+    results_path = session_dir / "results.json"
+    if not results_path.exists():
+        raise HTTPException(status_code=400, detail="Analysis results not found.")
+        
+    try:
+        with open(results_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        meta = get_project_metadata(session_id)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to load project details.")
+        
+    title = meta.get("report_title", "Crewlyze Executive Analysis")
+    rows = data.get("rows_count", 0)
+    cols = data.get("cols_count", 0)
+    
+    observations = data.get("insights", {}).get("observations", [])
+    obs_text = "\n".join([f"• {o}" for o in observations[:3]]) if observations else "No observations recorded."
+    
+    blocks = [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": "📊 Crewlyze Analysis Summary Report",
+                "emoji": True
+            }
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Report Title:* {title}\n*Dataset Profile:* `{rows} rows x {cols} columns`"
+            }
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Key Observations:*\n{obs_text}"
+            }
+        },
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "plain_text",
+                    "text": f"Session ID: {session_id} | Powered by CrewAI Multi-Agent BI Platform",
+                    "emoji": True
+                }
+            ]
+        }
+    ]
+    
+    payload = {"blocks": blocks}
+    
+    try:
+        import urllib.request
+        import json
+        req = urllib.request.Request(
+            webhook_url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req) as response:
+            res_body = response.read().decode("utf-8")
+        return {"status": "success", "response": res_body}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to post to Slack: {e}")
 
 
 @app.post("/api/validate-key")
@@ -658,7 +1548,8 @@ async def trigger_analysis(
     cooldown: int = Form(5),
     selected_tasks: str = Form(""),
     deep_analysis: str = Form("false"),
-    report_title: str = Form("")
+    report_title: str = Form(""),
+    clean_rules: Optional[str] = Form("")
 ):
     """Launches the CrewAI analysis process in the background."""
     session_dir = get_safe_session_dir(session_id)
@@ -685,12 +1576,13 @@ async def trigger_analysis(
 
     deep = deep_analysis.strip().lower() in {"true", "1", "yes", "on"}
 
-    # Persist report title if provided
+    # Persist report title and rules if provided
     try:
         meta = get_project_metadata(session_id)
         if report_title.strip():
             meta["report_title"] = report_title.strip()
-            save_project_metadata(session_id, meta)
+        meta["clean_rules"] = clean_rules.strip() if clean_rules else ""
+        save_project_metadata(session_id, meta)
     except Exception:
         pass
 
@@ -837,6 +1729,141 @@ async def ask_copilot(
     }
 
 
+@app.get("/api/export-notebook")
+async def get_jupyter_notebook(session_id: str):
+    """Generates a downloadable Jupyter Notebook (.ipynb) containing the analysis code."""
+    session_dir = get_safe_session_dir(session_id)
+    results_path = session_dir / "results.json"
+    if not results_path.exists():
+        raise HTTPException(status_code=400, detail="Analysis results not found.")
+        
+    try:
+        with open(results_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        code = data.get("code", "")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to read analysis code.")
+        
+    cells = []
+    
+    # 1. Title cell
+    cells.append({
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": [
+            f"# Crewlyze Autonomous Data Analysis Notebook\n",
+            f"Generated for session: `{session_id}`\n\n",
+            "This notebook contains the data preparation, relationship mapping, ",
+            "and visualization scripts automatically generated by the CrewAI agentic pipeline."
+        ]
+    })
+    
+    # 2. Setup import and load cell
+    setup_code = [
+        "import pandas as pd\n",
+        "import numpy as np\n",
+        "import matplotlib.pyplot as plt\n",
+        "import seaborn as sns\n",
+        "import plotly.express as px\n",
+        "import plotly.graph_objects as go\n\n",
+        "# Load the dataset (assumes 'cleaned.csv' is in the same directory as this notebook)\n",
+        "try:\n",
+        "    df = pd.read_csv('cleaned.csv')\n",
+        "    print(\"Cleaned dataset loaded successfully! Shape:\", df.shape)\n",
+        "except FileNotFoundError:\n",
+        "    print(\"ERROR: 'cleaned.csv' not found. Please ensure it is in the same folder as this notebook.\")\n"
+    ]
+    cells.append({
+        "cell_type": "code",
+        "execution_count": None,
+        "metadata": {},
+        "source": setup_code,
+        "outputs": []
+    })
+
+    # 3. Dynamic code and markdown cells chunker
+    if code:
+        raw_lines = code.splitlines(keepends=True)
+        current_block = []
+        
+        for line in raw_lines:
+            # Check for header comments or divider comments
+            if line.strip().startswith("# ##") or line.strip().startswith("# #"):
+                if current_block:
+                    cells.append({
+                        "cell_type": "code",
+                        "execution_count": None,
+                        "metadata": {},
+                        "source": current_block,
+                        "outputs": []
+                    })
+                    current_block = []
+                cells.append({
+                    "cell_type": "markdown",
+                    "metadata": {},
+                    "source": [line.replace("#", "").strip() + "\n"]
+                })
+            elif line.strip().startswith("#") and len(line.strip()) > 35 and not current_block:
+                cells.append({
+                    "cell_type": "markdown",
+                    "metadata": {},
+                    "source": [line.replace("#", "").strip() + "\n"]
+                })
+            else:
+                current_block.append(line)
+                
+            # Split cell on main figure show calls
+            if any(term in line for term in ("plt.show()", "fig.show()", "go.Figure", "px.scatter", "px.bar", "px.line")):
+                if len(current_block) > 5:
+                    cells.append({
+                        "cell_type": "code",
+                        "execution_count": None,
+                        "metadata": {},
+                        "source": current_block,
+                        "outputs": []
+                    })
+                    current_block = []
+                    
+        if current_block:
+            cells.append({
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "source": current_block,
+                "outputs": []
+            })
+    else:
+        cells.append({
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "source": ["# No visualization code generated for this session."],
+            "outputs": []
+        })
+
+    notebook = {
+        "cells": cells,
+        "metadata": {
+            "kernelspec": {
+                "display_name": "Python 3",
+                "language": "python",
+                "name": "python3"
+            },
+            "language_info": {
+                "name": "python",
+                "version": "3"
+            }
+        },
+        "nbformat": 4,
+        "nbformat_minor": 2
+    }
+    
+    headers = {
+        'Content-Disposition': f'attachment; filename="crewlyze_analysis_{session_id}.ipynb"'
+    }
+    return JSONResponse(content=notebook, headers=headers)
+
+
 @app.get("/api/export-pdf")
 async def get_pdf_report(session_id: str, report_title: Optional[str] = None):
     """Generates and streams back the executive PDF report."""
@@ -928,6 +1955,262 @@ async def export_webhook(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Webhook dispatch failed: {str(e)}")
 
+@app.post("/api/share/slack")
+async def manual_share_slack(
+    session_id: str = Form(...),
+    webhook_url: str = Form(...)
+):
+    try:
+        cfg = {"SLACK_WEBHOOK_URL": webhook_url}
+        results_path = get_safe_session_dir(session_id) / "results.json"
+        if not results_path.exists():
+            raise HTTPException(status_code=400, detail="Results not found. Run analysis first.")
+        with open(results_path, "r", encoding="utf-8") as f:
+            results_data = json.load(f)
+        meta = get_project_metadata(session_id)
+        send_automated_slack(session_id, results_data, meta, cfg)
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/share/discord")
+async def manual_share_discord(
+    session_id: str = Form(...),
+    webhook_url: str = Form(...)
+):
+    try:
+        cfg = {}
+        cfg_path = get_local_config_path()
+        if cfg_path.exists():
+            try:
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+            except Exception:
+                pass
+        cfg["DISCORD_WEBHOOK_URL"] = webhook_url
+        
+        results_path = get_safe_session_dir(session_id) / "results.json"
+        if not results_path.exists():
+            raise HTTPException(status_code=400, detail="Results not found. Run analysis first.")
+        with open(results_path, "r", encoding="utf-8") as f:
+            results_data = json.load(f)
+        meta = get_project_metadata(session_id)
+        send_automated_discord(session_id, results_data, meta, cfg)
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/share/email")
+async def manual_share_email(
+    session_id: str = Form(...),
+    smtp_account_id: Optional[str] = Form(None),
+    recipient_email: Optional[str] = Form(None),
+    subject: Optional[str] = Form(None),
+    send_pdf: Optional[str] = Form("true"),
+    send_insights: Optional[str] = Form("true")
+):
+    try:
+        cfg_path = get_local_config_path()
+        if not cfg_path.exists():
+            raise HTTPException(status_code=400, detail="SMTP configuration not found in settings.")
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        results_path = get_safe_session_dir(session_id) / "results.json"
+        if not results_path.exists():
+            raise HTTPException(status_code=400, detail="Results not found. Run analysis first.")
+        with open(results_path, "r", encoding="utf-8") as f:
+            results_data = json.load(f)
+        meta = get_project_metadata(session_id)
+        
+        selected_cfg = dict(cfg)
+        if smtp_account_id:
+            accounts = cfg.get("SMTP_ACCOUNTS", [])
+            selected_acc = next((acc for acc in accounts if acc.get("id") == smtp_account_id), None)
+            if selected_acc:
+                selected_cfg["SMTP_HOST"] = selected_acc.get("smtp_host")
+                selected_cfg["SMTP_PORT"] = selected_acc.get("smtp_port")
+                selected_cfg["SMTP_USER"] = selected_acc.get("smtp_user")
+                selected_cfg["SMTP_PASSWORD"] = selected_acc.get("smtp_password")
+                selected_cfg["SMTP_SENDER"] = selected_acc.get("smtp_sender") or selected_acc.get("smtp_user")
+                selected_cfg["SMTP_SECURE"] = selected_acc.get("smtp_secure")
+            else:
+                raise HTTPException(status_code=400, detail="Selected SMTP account not found.")
+                
+        if recipient_email:
+            selected_cfg["SMTP_RECIPIENT"] = recipient_email
+            
+        send_automated_email(
+            session_id, 
+            results_data, 
+            meta, 
+            selected_cfg, 
+            subject=subject, 
+            send_pdf=parse_bool(send_pdf), 
+            send_insights=parse_bool(send_insights)
+        )
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/integrations/test/email")
+async def test_email_integration(
+    smtp_host: str = Form(...),
+    smtp_port: str = Form(...),
+    smtp_user: str = Form(...),
+    smtp_password: str = Form(...),
+    smtp_sender: str = Form(""),
+    smtp_recipient: str = Form(...),
+    smtp_secure: str = Form("true")
+):
+    try:
+        import smtplib
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        
+        host = smtp_host.strip()
+        port = int(smtp_port.strip())
+        user = smtp_user.strip()
+        passwd = smtp_password.strip()
+        sender = smtp_sender.strip() or user
+        recipients = [r.strip() for r in smtp_recipient.split(",") if r.strip()]
+        secure = parse_bool(smtp_secure)
+        
+        if passwd == "********":
+            cfg_path = get_local_config_path()
+            if cfg_path.exists():
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    passwd = cfg.get("SMTP_PASSWORD", "")
+        
+        if not recipients:
+            raise ValueError("No valid recipient email address specified.")
+            
+        msg = MIMEMultipart()
+        msg["From"] = sender
+        msg["To"] = ", ".join(recipients)
+        msg["Subject"] = "🧪 Crewlyze Test Connection Email"
+        body = "This is a test connection email from your Crewlyze Integrations Hub. Your SMTP settings are correctly configured!"
+        msg.attach(MIMEText(body, "plain"))
+        
+        if secure:
+            server = smtplib.SMTP_SSL(host, port, timeout=10)
+        else:
+            server = smtplib.SMTP(host, port, timeout=10)
+            server.starttls()
+            
+        server.login(user, passwd)
+        server.sendmail(sender, recipients, msg.as_string())
+        server.quit()
+        return {"status": "success", "message": "Test email successfully dispatched!"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Email test failed: {str(e)}")
+
+@app.post("/api/integrations/test/slack")
+async def test_slack_integration(
+    webhook_url: str = Form(...)
+):
+    try:
+        import requests
+        url = webhook_url.strip()
+        if not url:
+            raise ValueError("Webhook URL cannot be empty.")
+        
+        payload = {
+            "text": "🧪 *Crewlyze Integrations Test*\nYour Slack Incoming Webhook is correctly configured! Connection status: `Active` ✓"
+        }
+        response = requests.post(url, json=payload, timeout=8)
+        response.raise_for_status()
+        return {"status": "success", "message": "Slack test message dispatched successfully!"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Slack test failed: {str(e)}")
+
+@app.post("/api/integrations/test/discord")
+async def test_discord_integration(
+    webhook_url: str = Form(...),
+    discord_username: Optional[str] = Form(""),
+    discord_avatar_url: Optional[str] = Form(""),
+    discord_embed_color: Optional[str] = Form(""),
+    discord_mention_role: Optional[str] = Form(""),
+    discord_send_summary: Optional[str] = Form("true"),
+    discord_attach_pdf: Optional[str] = Form("false")
+):
+    try:
+        import requests
+        import json
+        url = webhook_url.strip()
+        if not url:
+            raise ValueError("Webhook URL cannot be empty.")
+            
+        username = discord_username.strip() if discord_username else ""
+        avatar_url = discord_avatar_url.strip() if discord_avatar_url else "https://raw.githubusercontent.com/sowmiyan-s/Multi-Agent-Data-Analysis-System-with-CrewAI/main/assets/chat_logo.png"
+        embed_color_hex = discord_embed_color.strip() if discord_embed_color else "#5865F2"
+        mention = discord_mention_role.strip() if discord_mention_role else ""
+        send_summary = parse_bool(discord_send_summary)
+        attach_pdf = parse_bool(discord_attach_pdf)
+        
+        color_val = 3447003
+        if embed_color_hex.startswith("#"):
+            try:
+                color_val = int(embed_color_hex.lstrip("#"), 16)
+            except Exception:
+                pass
+                
+        embed = {
+            "title": "🧪 Crewlyze Integrations Test",
+            "description": "Your Discord webhook configuration is fully functional. Connection status: `Active` ✓",
+            "color": color_val
+        }
+        
+        payload = {}
+        if send_summary:
+            payload["embeds"] = [embed]
+        if username:
+            payload["username"] = username
+        if avatar_url:
+            payload["avatar_url"] = avatar_url
+        if mention:
+            payload["content"] = f"{mention} - Test Connection greeting!"
+            
+        files = {}
+        if attach_pdf:
+            import io
+            test_file = io.BytesIO(b"%PDF-1.4\n%Connection test stream document")
+            files["file"] = ("test_connection_attachment.pdf", test_file, "application/pdf")
+            
+        if files:
+            payload_data = {"payload_json": json.dumps(payload)}
+            response = requests.post(url, data=payload_data, files=files, timeout=8)
+        else:
+            response = requests.post(url, json=payload, timeout=8)
+            
+        response.raise_for_status()
+        return {"status": "success", "message": "Discord test embed dispatched successfully!"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Discord test failed: {str(e)}")
+
+@app.post("/api/integrations/test/webhook")
+async def test_webhook_integration(
+    webhook_url: str = Form(...)
+):
+    try:
+        import requests
+        url = webhook_url.strip()
+        if not url:
+            raise ValueError("Webhook destination URL cannot be empty.")
+            
+        payload = {
+            "event": "integration_test",
+            "timestamp": int(time.time() * 1000),
+            "status": "success",
+            "message": "This is a REST API connection test payload from Crewlyze."
+        }
+        response = requests.post(url, json=payload, timeout=8)
+        response.raise_for_status()
+        return {"status": "success", "message": "Custom webhook POST test request succeeded!"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Custom webhook test failed: {str(e)}")
+
+
 
 @app.get("/api/charts/{session_id}/{filename}")
 async def serve_chart(session_id: str, filename: str):
@@ -984,6 +2267,8 @@ async def list_ollama_models(base_url: str = "http://localhost:11434"):
 def get_local_config_path() -> Path:
     return USER_HOME / "config.json"
 
+config_lock = asyncio.Lock()
+
 @app.get("/api/metrics")
 async def get_performance_metrics():
     from config.metrics_tracker import get_metrics
@@ -991,57 +2276,203 @@ async def get_performance_metrics():
 
 @app.get("/api/config")
 async def get_local_config():
-    cfg_path = get_local_config_path()
-    if not cfg_path.exists():
-        return {}
-    try:
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+    async with config_lock:
+        cfg_path = get_local_config_path()
+        cfg = {}
+        if cfg_path.exists():
+            try:
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+            except Exception:
+                pass
+        
+        # Ensure default storage directories and log levels are returned
+        if "CREWLYZE_DATA_DIR" not in cfg:
+            cfg["CREWLYZE_DATA_DIR"] = str(DATA_DIR)
+        if "LOG_LEVEL" not in cfg:
+            cfg["LOG_LEVEL"] = os.getenv("LOG_LEVEL", "INFO")
+        
+        return cfg
 
 @app.post("/api/config")
 async def save_local_config(
-    provider: str = Form(...),
+    request: Request,
+    provider: Optional[str] = Form(None),
     api_key: Optional[str] = Form(""),
     base_url: Optional[str] = Form("")
 ):
-    cfg_path = get_local_config_path()
-    cfg_path.parent.mkdir(parents=True, exist_ok=True)
-    cfg = {}
-    if cfg_path.exists():
-        try:
-            with open(cfg_path, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-        except Exception:
-            pass
-    
-    if provider == "ollama":
-        key_name = "OLLAMA_BASE_URL"
-        cfg[key_name] = base_url.strip()
-    elif provider in ("nvidia", "minimax"):
-        key_name = "NVIDIA_API_KEY"
-    else:
-        key_name = f"{provider.upper()}_API_KEY"
-
-    if provider != "ollama":
-        if api_key.strip():
-            if not api_key.endswith("..."):
-                cfg[key_name] = api_key.strip()
-        else:
-            cfg.pop(key_name, None)
-            
-    if base_url.strip() and provider == "custom":
-        cfg["CUSTOM_BASE_URL"] = base_url.strip()
+    async with config_lock:
+        cfg_path = get_local_config_path()
+        cfg_path.parent.mkdir(parents=True, exist_ok=True)
+        cfg = {}
+        if cfg_path.exists():
+            try:
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+            except Exception:
+                pass
         
-    try:
-        with open(cfg_path, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, indent=2)
-        for k, v in cfg.items():
-            os.environ[k] = str(v)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to write config: {e}")
-    return {"status": "success"}
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            try:
+                payload = await request.json()
+                if isinstance(payload, dict):
+                    for k, v in payload.items():
+                        if v is not None:
+                            cfg[k] = v
+                        else:
+                            cfg.pop(k, None)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Invalid JSON payload: {e}")
+        else:
+            # Fallback to compatibility form post
+            if not provider:
+                raise HTTPException(status_code=400, detail="Missing 'provider' form parameter.")
+            
+            if provider == "ollama":
+                key_name = "OLLAMA_BASE_URL"
+                cfg[key_name] = base_url.strip()
+            elif provider in ("nvidia", "minimax"):
+                key_name = "NVIDIA_API_KEY"
+            else:
+                key_name = f"{provider.upper()}_API_KEY"
+
+            if provider != "ollama":
+                if api_key.strip():
+                    if not api_key.endswith("..."):
+                        cfg[key_name] = api_key.strip()
+                else:
+                    cfg.pop(key_name, None)
+                    
+            if base_url.strip() and provider == "custom":
+                cfg["CUSTOM_BASE_URL"] = base_url.strip()
+            
+        try:
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, indent=2)
+            for k, v in cfg.items():
+                os.environ[k] = str(v)
+            
+            # Refresh directory paths dynamically in-memory
+            if "CREWLYZE_DATA_DIR" in cfg:
+                global DATA_DIR, SESSIONS_DIR
+                DATA_DIR = Path(cfg["CREWLYZE_DATA_DIR"])
+                SESSIONS_DIR = DATA_DIR / "sessions"
+                DATA_DIR.mkdir(exist_ok=True, parents=True)
+                SESSIONS_DIR.mkdir(exist_ok=True, parents=True)
+                
+            if "CREWLYZE_OUTPUTS_DIR" in cfg:
+                global OUTPUTS_DIR
+                OUTPUTS_DIR = Path(cfg["CREWLYZE_OUTPUTS_DIR"])
+                OUTPUTS_DIR.mkdir(exist_ok=True, parents=True)
+                
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to write config: {e}")
+        return {"status": "success"}
+
+@app.post("/api/config/automation")
+async def save_automation_config(
+    automation_email_enabled: Optional[str] = Form("false"),
+    smtp_host: Optional[str] = Form(""),
+    smtp_port: Optional[str] = Form(""),
+    smtp_user: Optional[str] = Form(""),
+    smtp_password: Optional[str] = Form(""),
+    smtp_sender: Optional[str] = Form(""),
+    smtp_recipient: Optional[str] = Form(""),
+    smtp_secure: Optional[str] = Form("true"),
+    automation_slack_enabled: Optional[str] = Form("false"),
+    slack_webhook_url: Optional[str] = Form(""),
+    slack_send_summary: Optional[str] = Form("true"),
+    automation_discord_enabled: Optional[str] = Form("false"),
+    discord_webhook_url: Optional[str] = Form(""),
+    discord_username: Optional[str] = Form(""),
+    discord_avatar_url: Optional[str] = Form(""),
+    discord_embed_color: Optional[str] = Form(""),
+    discord_mention_role: Optional[str] = Form(""),
+    discord_toggle_stats: Optional[str] = Form("true"),
+    discord_toggle_warnings: Optional[str] = Form("true"),
+    discord_send_summary: Optional[str] = Form("true"),
+    discord_attach_pdf: Optional[str] = Form("true"),
+    discord_attach_charts: Optional[str] = Form("false"),
+    discord_separate_channels: Optional[str] = Form("false"),
+    discord_cleaning_url: Optional[str] = Form(""),
+    discord_cleaning_enabled: Optional[str] = Form("false"),
+    discord_relations_url: Optional[str] = Form(""),
+    discord_relations_enabled: Optional[str] = Form("false"),
+    discord_insights_url: Optional[str] = Form(""),
+    discord_insights_enabled: Optional[str] = Form("false"),
+    discord_visualization_url: Optional[str] = Form(""),
+    discord_visualization_enabled: Optional[str] = Form("false"),
+    automation_webhook_enabled: Optional[str] = Form("false"),
+    outbound_webhook_url: Optional[str] = Form(""),
+    webhook_send_json: Optional[str] = Form("true"),
+    webhook_attach_pdf: Optional[str] = Form("true")
+):
+    async with config_lock:
+        cfg_path = get_local_config_path()
+        cfg_path.parent.mkdir(parents=True, exist_ok=True)
+        cfg = {}
+        if cfg_path.exists():
+            try:
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+            except Exception:
+                pass
+                
+        cfg["AUTOMATION_EMAIL_ENABLED"] = parse_bool(automation_email_enabled)
+        cfg["SMTP_HOST"] = smtp_host.strip() if smtp_host else ""
+        cfg["SMTP_PORT"] = int(smtp_port) if smtp_port and smtp_port.strip().isdigit() else 587
+        cfg["SMTP_USER"] = smtp_user.strip() if smtp_user else ""
+        
+        if smtp_password and smtp_password != "********" and not smtp_password.endswith("..."):
+            cfg["SMTP_PASSWORD"] = smtp_password.strip()
+        elif not smtp_password:
+            cfg["SMTP_PASSWORD"] = ""
+            
+        cfg["SMTP_SENDER"] = smtp_sender.strip() if smtp_sender else ""
+        cfg["SMTP_RECIPIENT"] = smtp_recipient.strip() if smtp_recipient else ""
+        cfg["SMTP_SECURE"] = parse_bool(smtp_secure)
+        
+        cfg["AUTOMATION_SLACK_ENABLED"] = parse_bool(automation_slack_enabled)
+        cfg["SLACK_WEBHOOK_URL"] = slack_webhook_url.strip() if slack_webhook_url else ""
+        cfg["SLACK_SEND_SUMMARY"] = parse_bool(slack_send_summary)
+
+        cfg["AUTOMATION_DISCORD_ENABLED"] = parse_bool(automation_discord_enabled)
+        cfg["DISCORD_WEBHOOK_URL"] = discord_webhook_url.strip() if discord_webhook_url else ""
+        cfg["DISCORD_USERNAME"] = discord_username.strip() if discord_username else ""
+        cfg["DISCORD_AVATAR_URL"] = discord_avatar_url.strip() if discord_avatar_url else ""
+        cfg["DISCORD_EMBED_COLOR"] = discord_embed_color.strip() if discord_embed_color else "#5865F2"
+        cfg["DISCORD_MENTION_ROLE"] = discord_mention_role.strip() if discord_mention_role else ""
+        cfg["DISCORD_TOGGLE_STATS"] = parse_bool(discord_toggle_stats)
+        cfg["DISCORD_TOGGLE_WARNINGS"] = parse_bool(discord_toggle_warnings)
+        cfg["DISCORD_SEND_SUMMARY"] = parse_bool(discord_send_summary)
+        cfg["DISCORD_ATTACH_PDF"] = parse_bool(discord_attach_pdf)
+        cfg["DISCORD_ATTACH_CHARTS"] = parse_bool(discord_attach_charts)
+        
+        cfg["DISCORD_SEPARATE_CHANNELS"] = parse_bool(discord_separate_channels)
+        cfg["DISCORD_CLEANING_URL"] = discord_cleaning_url.strip() if discord_cleaning_url else ""
+        cfg["DISCORD_CLEANING_ENABLED"] = parse_bool(discord_cleaning_enabled)
+        cfg["DISCORD_RELATIONS_URL"] = discord_relations_url.strip() if discord_relations_url else ""
+        cfg["DISCORD_RELATIONS_ENABLED"] = parse_bool(discord_relations_enabled)
+        cfg["DISCORD_INSIGHTS_URL"] = discord_insights_url.strip() if discord_insights_url else ""
+        cfg["DISCORD_INSIGHTS_ENABLED"] = parse_bool(discord_insights_enabled)
+        cfg["DISCORD_VISUALIZATION_URL"] = discord_visualization_url.strip() if discord_visualization_url else ""
+        cfg["DISCORD_VISUALIZATION_ENABLED"] = parse_bool(discord_visualization_enabled)
+        
+        cfg["AUTOMATION_WEBHOOK_ENABLED"] = parse_bool(automation_webhook_enabled)
+        cfg["OUTBOUND_WEBHOOK_URL"] = outbound_webhook_url.strip() if outbound_webhook_url else ""
+        cfg["WEBHOOK_SEND_JSON"] = parse_bool(webhook_send_json)
+        cfg["WEBHOOK_ATTACH_PDF"] = parse_bool(webhook_attach_pdf)
+        
+        try:
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, indent=2)
+            # Update environment variables
+            for k, v in cfg.items():
+                os.environ[k] = str(v)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to write config: {e}")
+        return {"status": "success"}
 
 @app.get("/api/llm/providers")
 async def get_llm_providers():
@@ -1321,33 +2752,7 @@ async def get_llm_models(provider: str, api_key: Optional[str] = None):
     verified_models = sorted(list(set(verified_models)))
     return {"models": verified_models}
 
-@app.post("/api/validate-key")
-async def validate_key(
-    provider: str = Form(...),
-    model: str = Form(...),
-    api_key: Optional[str] = Form(""),
-):
-    """Pings the LLM provider to validate the model identifier and API key."""
-    try:
-        # Load crew module functions lazily if needed
-        _load_crew()
-        
-        # Get actual env key name
-        if provider == "ollama":
-            env_key_name = "OLLAMA_BASE_URL"
-        elif provider in ("nvidia", "minimax"):
-            env_key_name = "NVIDIA_API_KEY"
-        else:
-            env_key_name = f"{provider.upper()}_API_KEY"
-            
-        result = _validate_llm_connection(provider, model, api_key)
-        if not result.get("valid"):
-            raise HTTPException(status_code=400, detail=result.get("message", "Validation failed"))
-        return {"status": "success", "message": result.get("message")}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Validation failed: {str(e)}")
+# Duplicate validate-key endpoint removed in favor of validate_api_key defined at line 1374.
 
 
 # ---------------------------------------------------------------------------
@@ -1378,12 +2783,22 @@ async def create_project(
     goal: str = Form(""),
     file: UploadFile = File(...)
 ):
-    """Creates a new project context and uploads the dataset CSV."""
+    """Creates a new project context and uploads the dataset (CSV, Excel, or SQLite)."""
     project_id = uuid.uuid4().hex[:12]
     session_dir = get_safe_session_dir(project_id)
     session_dir.mkdir(parents=True, exist_ok=True)
 
-    file_path = session_dir / "original_upload.csv"
+    filename_lower = file.filename.lower()
+    is_excel = filename_lower.endswith((".xlsx", ".xls"))
+    is_sqlite = filename_lower.endswith((".db", ".sqlite", ".sqlite3"))
+
+    if is_excel:
+        file_path = session_dir / "uploaded_file.xlsx"
+    elif is_sqlite:
+        file_path = session_dir / "uploaded_file.db"
+    else:
+        file_path = session_dir / "original_upload.csv"
+
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
@@ -1391,6 +2806,35 @@ async def create_project(
     log_path = session_dir / "stdout.log"
     with open(log_path, "w") as f:
         f.write("Project created. Dataset uploaded successfully.\n")
+
+    status = "idle"
+    sheets = []
+    tables = []
+
+    if is_excel:
+        try:
+            xl = pd.ExcelFile(file_path)
+            sheets = xl.sheet_names
+            status = "awaiting_sheet"
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to read Excel workbook: {e}")
+    elif is_sqlite:
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(file_path))
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = [row[0] for row in cursor.fetchall()]
+            conn.close()
+            status = "awaiting_table"
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to read SQLite tables: {e}")
+    else:
+        try:
+            df = read_csv_robust(file_path)
+            df.to_csv(file_path, index=False)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to read CSV: {e}")
 
     meta = {
         "id": project_id,
@@ -1401,11 +2845,22 @@ async def create_project(
         "filename": file.filename,
         "size": file_path.stat().st_size,
         "created_at": time.time() * 1000,
-        "status": "idle"
+        "status": status
     }
     save_project_metadata(project_id, meta)
 
-    return meta
+    return {
+        "id": project_id,
+        "name": meta["name"],
+        "report_title": meta["report_title"],
+        "goal": meta["goal"],
+        "filename": meta["filename"],
+        "size": meta["size"],
+        "status": meta["status"],
+        "type": "excel" if is_excel else "sqlite" if is_sqlite else "csv",
+        "sheets": sheets,
+        "tables": tables
+    }
 
 @app.post("/api/projects/{project_id}/rename")
 async def rename_project(project_id: str, name: str = Form(...)):
@@ -1660,12 +3115,307 @@ async def download_project_csv(project_id: str):
 
 
 # ---------------------------------------------------------------------------
+# PowerPoint (.pptx) Slide Deck Export
+# ---------------------------------------------------------------------------
+
+@app.get("/api/projects/{project_id}/export-pptx")
+async def export_project_pptx(project_id: str):
+    """Generates an executive PowerPoint slide deck from project results."""
+    session_dir = get_safe_session_dir(project_id)
+    results_path = session_dir / "results.json"
+    if not results_path.exists():
+        raise HTTPException(status_code=404, detail="Results not found. Run analysis first.")
+
+    try:
+        from pptx import Presentation
+        from pptx.util import Inches, Pt
+        from pptx.dml.color import RGBColor
+        from pptx.enum.text import PP_ALIGN
+        from pptx.enum.shapes import MSO_SHAPE
+    except ImportError:
+        import subprocess, sys
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "python-pptx"])
+        from pptx import Presentation
+        from pptx.util import Inches, Pt
+        from pptx.dml.color import RGBColor
+        from pptx.enum.text import PP_ALIGN
+        from pptx.enum.shapes import MSO_SHAPE
+
+    with open(results_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    meta = get_project_metadata(project_id)
+    report_title = meta.get("report_title", meta.get("name", "Executive Analysis"))
+    project_name = meta.get("name", "Crewlyze Project")
+
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+
+    def _add_bg(slide, r=15, g=17, b=23):
+        bg = slide.background
+        fill = bg.fill
+        fill.solid()
+        fill.fore_color.rgb = RGBColor(r, g, b)
+
+    def _add_text(slide, left, top, width, height, text, size=14, bold=False, color=(226, 232, 240), align=PP_ALIGN.LEFT):
+        txBox = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
+        tf = txBox.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        p.text = text
+        p.font.size = Pt(size)
+        p.font.bold = bold
+        p.font.color.rgb = RGBColor(*color)
+        p.alignment = align
+        return tf
+
+    # Slide 1: Cover Page
+    slide1 = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_bg(slide1)
+    # Decorative branding vertical bar
+    shape = slide1.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.5), Inches(0.5), Inches(0.15), Inches(6.5))
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = RGBColor(139, 92, 246)
+    shape.line.fill.background()
+
+    _add_text(slide1, 1.5, 2.0, 10, 1.2, report_title, size=36, bold=True, color=(139, 92, 246))
+    _add_text(slide1, 1.5, 3.5, 10, 0.6, f"Project: {project_name}", size=18, color=(148, 163, 184))
+    import datetime
+    _add_text(slide1, 1.5, 4.3, 10, 0.5, f"Generated on {datetime.datetime.now().strftime('%B %d, %Y at %I:%M %p')}", size=14, color=(100, 116, 139))
+    _add_text(slide1, 1.5, 5.3, 10, 0.5, f"{data.get('rows_count', 0):,} rows × {data.get('cols_count', 0)} columns  |  {data.get('numeric_count', 0)} numeric  |  {data.get('cat_count', 0)} categorical", size=13, color=(100, 116, 139))
+
+    # Slide 2: Dataset Profile & Descriptive Stats
+    import pandas as pd
+    cleaned_csv = session_dir / "cleaned.csv"
+    stats_df = None
+    if cleaned_csv.exists():
+        try:
+            stats_df = pd.read_csv(cleaned_csv)
+        except Exception:
+            pass
+
+    slide2 = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_bg(slide2)
+    _add_text(slide2, 1.0, 0.5, 11, 0.6, "Dataset Profile & Descriptive Statistics", size=28, bold=True, color=(16, 185, 129))
+
+    if stats_df is not None:
+        numeric_cols = stats_df.select_dtypes(include=['number']).columns.tolist()
+        stats = []
+        for col in numeric_cols[:7]:
+            col_data = stats_df[col].dropna()
+            if not col_data.empty:
+                stats.append([
+                    col[:25], 
+                    f"{col_data.min():.2f}" if col_data.dtype.kind in 'fc' else str(int(col_data.min())),
+                    f"{col_data.max():.2f}" if col_data.dtype.kind in 'fc' else str(int(col_data.max())),
+                    f"{col_data.mean():.2f}"
+                ])
+        
+        # Add table
+        rows_len = len(stats) + 1
+        cols_len = 4
+        x, y, cx, cy = Inches(1.0), Inches(1.5), Inches(11.3), Inches(0.5 + 0.45 * len(stats))
+        table_shape = slide2.shapes.add_table(rows_len, cols_len, x, y, cx, cy)
+        table = table_shape.table
+        
+        table.columns[0].width = Inches(4.5)
+        table.columns[1].width = Inches(2.2)
+        table.columns[2].width = Inches(2.2)
+        table.columns[3].width = Inches(2.4)
+        
+        headers = ["Numerical Feature", "Minimum Value", "Maximum Value", "Arithmetic Mean"]
+        for c_idx, h_text in enumerate(headers):
+            cell = table.cell(0, c_idx)
+            cell.text = h_text
+            cell.fill.solid()
+            cell.fill.fore_color.rgb = RGBColor(24, 28, 41)
+            p = cell.text_frame.paragraphs[0]
+            p.font.size = Pt(13)
+            p.font.bold = True
+            p.font.color.rgb = RGBColor(16, 185, 129)
+            p.alignment = PP_ALIGN.LEFT if c_idx == 0 else PP_ALIGN.RIGHT
+            
+        for r_idx, row_data in enumerate(stats):
+            for c_idx, val in enumerate(row_data):
+                cell = table.cell(r_idx + 1, c_idx)
+                cell.text = val
+                cell.fill.solid()
+                cell.fill.fore_color.rgb = RGBColor(30, 41, 59) if r_idx % 2 == 0 else RGBColor(15, 23, 42)
+                p = cell.text_frame.paragraphs[0]
+                p.font.size = Pt(11)
+                p.font.color.rgb = RGBColor(241, 245, 249)
+                p.alignment = PP_ALIGN.LEFT if c_idx == 0 else PP_ALIGN.RIGHT
+    else:
+        _add_text(slide2, 1.2, 1.8, 10, 1.0, "No descriptive dataset stats could be loaded for this project format.", size=14, color=(239, 68, 68))
+
+    # Slide 3: Data Cleaning Audit Trail
+    cleaning = data.get("cleaning_steps", "").strip()
+    if cleaning:
+        slide3 = prs.slides.add_slide(prs.slide_layouts[6])
+        _add_bg(slide3)
+        _add_text(slide3, 1.0, 0.5, 11, 0.6, "Data Cleaning Audit Trail", size=28, bold=True, color=(16, 185, 129))
+        
+        card = slide3.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.0), Inches(1.4), Inches(11.33), Inches(5.3))
+        card.fill.solid()
+        card.fill.fore_color.rgb = RGBColor(30, 41, 59)
+        card.line.color.rgb = RGBColor(71, 85, 105)
+        
+        lines = [l.strip() for l in cleaning.replace("**", "").split("\n") if l.strip()][:12]
+        y = 1.6
+        for line in lines:
+            _add_text(slide3, 1.3, y, 10.7, 0.35, f"•  {line}", size=13, color=(226, 232, 240))
+            y += 0.4
+
+    # Slide 4: Relationship Insights
+    relations = data.get("relations", "").strip()
+    if relations:
+        slide4 = prs.slides.add_slide(prs.slide_layouts[6])
+        _add_bg(slide4)
+        _add_text(slide4, 1.0, 0.5, 11, 0.6, "Relationship & Correlation Map Insights", size=28, bold=True, color=(6, 182, 212))
+        
+        card = slide4.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.0), Inches(1.4), Inches(11.33), Inches(5.3))
+        card.fill.solid()
+        card.fill.fore_color.rgb = RGBColor(15, 23, 42)
+        card.line.color.rgb = RGBColor(6, 182, 212)
+        
+        lines = [l.strip() for l in relations.replace("**", "").split("\n") if l.strip()][:12]
+        y = 1.6
+        for line in lines:
+            _add_text(slide4, 1.3, y, 10.7, 0.35, f"•  {line}", size=13, color=(226, 232, 240))
+            y += 0.4
+
+    # Slide 5: Strategic Business Insights
+    insights = data.get("insights", "").strip()
+    insights_paragraphs = [p.strip() for p in insights.replace("**", "").split("\n\n") if p.strip()]
+    if insights:
+        slide5 = prs.slides.add_slide(prs.slide_layouts[6])
+        _add_bg(slide5)
+        _add_text(slide5, 1.0, 0.5, 11, 0.6, "Strategic Business Insights", size=28, bold=True, color=(245, 158, 11))
+        
+        card = slide5.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.0), Inches(1.4), Inches(11.33), Inches(5.3))
+        card.fill.solid()
+        card.fill.fore_color.rgb = RGBColor(30, 41, 59)
+        card.line.color.rgb = RGBColor(245, 158, 11)
+        
+        y = 1.6
+        for p in insights_paragraphs[:5]:
+            _add_text(slide5, 1.3, y, 10.7, 0.9, p, size=13, color=(226, 232, 240))
+            y += 1.0
+
+    # Slide 6+: Interleaved Charts & Insights
+    png_charts = data.get("png_charts", [])
+    output_dir = Path(data.get("output_dir", ""))
+    
+    for idx, chart_name in enumerate(png_charts[:4]):
+        chart_path = output_dir / chart_name
+        if chart_path.exists():
+            slide_chart = prs.slides.add_slide(prs.slide_layouts[6])
+            _add_bg(slide_chart)
+            chart_title = chart_name.replace(".png", "").replace("_", " ").title()
+            _add_text(slide_chart, 1.0, 0.5, 11, 0.6, f"Data Visualization: {chart_title}", size=26, bold=True, color=(244, 63, 94))
+            
+            try:
+                slide_chart.shapes.add_picture(str(chart_path), Inches(0.8), Inches(1.5), Inches(6.0))
+            except Exception as chart_err:
+                print(f"Error adding slide chart: {chart_err}")
+                
+            insight_para = insights_paragraphs[idx] if idx < len(insights_paragraphs) else "Executive analytical visualizer showcasing structural trend matrices and feature distribution maps."
+            
+            text_card = slide_chart.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(7.2), Inches(1.5), Inches(5.3), Inches(4.8))
+            text_card.fill.solid()
+            text_card.fill.fore_color.rgb = RGBColor(30, 41, 59)
+            text_card.line.color.rgb = RGBColor(244, 63, 94)
+            
+            _add_text(slide_chart, 7.4, 1.7, 4.9, 4.4, insight_para, size=14, color=(226, 232, 240))
+
+    # Slide Last: Conclusion
+    slide_conclusion = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_bg(slide_conclusion)
+    _add_text(slide_conclusion, 1.5, 1.8, 10.3, 0.8, "Conclusions & Next Steps", size=32, bold=True, color=(16, 185, 129))
+    
+    conclusion_body = (
+        "•  Leverage identified correlations and relationships to optimize key business outcomes.\n\n"
+        "•  Address data anomalies and outliers revealed in the profile and visual charts.\n\n"
+        "•  Utilize the generated machine-learning ready structures to deploy downstream analytics."
+    )
+    if len(insights_paragraphs) > 0:
+        last_para = insights_paragraphs[-1]
+        if len(last_para) > 150:
+            conclusion_body = f"•  {last_para}\n\n•  Leverage identified correlations and relationships to optimize key business outcomes."
+            
+    c_card = slide_conclusion.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.3), Inches(2.6), Inches(10.7), Inches(3.8))
+    c_card.fill.solid()
+    c_card.fill.fore_color.rgb = RGBColor(15, 23, 42)
+    c_card.line.color.rgb = RGBColor(16, 185, 129)
+    
+    _add_text(slide_conclusion, 1.6, 2.9, 10.1, 3.2, conclusion_body, size=15, color=(226, 232, 240))
+
+    pptx_path = session_dir / "report.pptx"
+    prs.save(str(pptx_path))
+
+    base_name = meta.get("filename", "report").rsplit(".", 1)[0] if "." in meta.get("filename", "") else meta.get("name", "report")
+    return FileResponse(str(pptx_path), media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation", filename=f"{base_name}_executive.pptx")
+
+# ---------------------------------------------------------------------------
+# Cross-Project Comparison API
+# ---------------------------------------------------------------------------
+
+@app.get("/api/projects/compare")
+async def compare_projects(project_a: str, project_b: str):
+    """Returns comparative delta data for two completed projects."""
+    def _load_project_summary(pid):
+        session_dir = get_safe_session_dir(pid)
+        results_path = session_dir / "results.json"
+        if not results_path.exists():
+            raise HTTPException(status_code=404, detail=f"Results not found for project {pid}")
+        with open(results_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        meta = get_project_metadata(pid)
+        return {
+            "id": pid,
+            "name": meta.get("name", pid),
+            "rows": data.get("rows_count", 0),
+            "cols": data.get("cols_count", 0),
+            "numeric": data.get("numeric_count", 0),
+            "categorical": data.get("cat_count", 0),
+            "charts_count": len(data.get("plotly_charts", [])) + len(data.get("png_charts", [])),
+            "cleaning": data.get("cleaning_steps", "")[:500],
+            "insights": data.get("insights", "")[:800],
+            "relations": data.get("relations", "")[:500],
+        }
+
+    a = _load_project_summary(project_a)
+    b = _load_project_summary(project_b)
+
+    def _delta(va, vb):
+        if va == 0:
+            return "+∞%" if vb > 0 else "0%"
+        pct = round(((vb - va) / va) * 100, 1)
+        return f"+{pct}%" if pct >= 0 else f"{pct}%"
+
+    return {
+        "project_a": a,
+        "project_b": b,
+        "deltas": {
+            "rows": _delta(a["rows"], b["rows"]),
+            "cols": _delta(a["cols"], b["cols"]),
+            "numeric": _delta(a["numeric"], b["numeric"]),
+            "categorical": _delta(a["categorical"], b["categorical"]),
+            "charts": _delta(a["charts_count"], b["charts_count"]),
+        }
+    }
+
+
+# ---------------------------------------------------------------------------
 # Frontend Static Mounts
 # ---------------------------------------------------------------------------
 
 BASE_DIR = Path(__file__).resolve().parent
 web_dir = BASE_DIR / "web"
 assets_dir = BASE_DIR / "assets"
+if not assets_dir.exists() or not list(assets_dir.glob("*")):
+    assets_dir = web_dir / "assets"
 
 app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="web")

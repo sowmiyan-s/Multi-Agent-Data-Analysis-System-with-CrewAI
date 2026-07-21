@@ -7,17 +7,58 @@
   <title>Crewlyze — AI-Powered Business Intelligence</title>
   <meta name="description"
     content="Autonomous Multi-Agent AI system for data cleaning, relationship analysis, business insights, and interactive visualizations." />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
-    rel="stylesheet" />
-  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="stylesheet" href="/style.css" />
+  <!-- Offline Assets -->
+  <link rel="stylesheet" href="/libs/fonts.css" />
+  <script src="/libs/plotly-2.35.2.min.js"></script>
+  <script src="/libs/marked.min.js"></script>
+  <script src="/libs/lucide.min.js"></script>
+  <link rel="stylesheet" href="/style.css?v=1.0.4" />
   <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <style>
+    /* Settings Sidebar overrides to guarantee no caching collapse */
+    .settings-sidebar-tabs {
+      width: 240px !important;
+      flex-shrink: 0 !important;
+    }
+    .settings-sidebar-tabs button.settings-tab-btn {
+      background: transparent !important;
+      border: none !important;
+      border-left: 3px solid transparent !important;
+      color: var(--text-secondary) !important;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-align: left;
+      padding: 12px 20px !important;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100% !important;
+      transition: all 0.2s;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      position: relative;
+      z-index: 1;
+    }
+    .settings-sidebar-tabs button.settings-tab-btn.active {
+      color: #fff !important;
+    }
+    .settings-sidebar-tabs button.settings-tab-btn:hover:not(.active) {
+      background: rgba(255, 255, 255, 0.02) !important;
+      color: #fff !important;
+    }
+    .settings-tab-indicator {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(139, 92, 246, 0.08);
+      border-left: 3px solid var(--violet-light);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 0;
+      pointer-events: none;
+  </style>
 </head>
 
 <body>
@@ -67,9 +108,24 @@
         <button id="sidebarExportPdfBtn" class="sidebar-action-btn btn-primary"
           style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8rem; padding: 10px 12px; border-radius: var(--r-sm); font-weight: 600; cursor: pointer;"><i
             data-lucide="file-text" style="width: 14px; height: 14px;"></i> Export PDF Report</button>
+        <button id="sidebarExportPptxBtn" class="sidebar-action-btn btn-secondary"
+          style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8rem; padding: 10px 12px; border-radius: var(--r-sm); font-weight: 600; cursor: pointer; background: rgba(245,158,11,0.06); border-color: #f59e0b; color: #f59e0b;"><i
+            data-lucide="presentation" style="width: 14px; height: 14px;"></i> Export PowerPoint (.pptx)</button>
         <button id="sidebarExportZipBtn" class="sidebar-action-btn btn-secondary"
           style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8rem; padding: 10px 12px; border-radius: var(--r-sm); font-weight: 600; cursor: pointer;"><i
             data-lucide="archive" style="width: 14px; height: 14px;"></i> Export Project (.zip)</button>
+        <button id="sidebarExportNotebookBtn" class="sidebar-action-btn btn-secondary"
+          style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8rem; padding: 10px 12px; border-radius: var(--r-sm); font-weight: 600; cursor: pointer; background: rgba(14,165,233,0.06); border-color: #0ea5e9; color: #0ea5e9;"><i
+            data-lucide="file-code" style="width: 14px; height: 14px;"></i> Export Notebook (.ipynb)</button>
+        <button id="sidebarShareSlackBtn" class="sidebar-action-btn btn-secondary hidden"
+          style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8rem; padding: 10px 12px; border-radius: var(--r-sm); font-weight: 600; cursor: pointer; background: rgba(74,21,75,0.06); border-color: #4a154b; color: #e01e5a;"><i
+            data-lucide="slack" style="width: 14px; height: 14px;"></i> Share to Slack</button>
+        <button id="sidebarShareDiscordBtn" class="sidebar-action-btn btn-secondary hidden"
+          style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8rem; padding: 10px 12px; border-radius: var(--r-sm); font-weight: 600; cursor: pointer; background: rgba(88,101,242,0.06); border-color: #5865f2; color: #5865f2;"><i
+            data-lucide="message-square" style="width: 14px; height: 14px;"></i> Share to Discord</button>
+        <button id="sidebarEmailReportBtn" class="sidebar-action-btn btn-secondary hidden"
+          style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8rem; padding: 10px 12px; border-radius: var(--r-sm); font-weight: 600; cursor: pointer; background: rgba(16,185,129,0.06); border-color: #10b981; color: #10b981;"><i
+            data-lucide="mail" style="width: 14px; height: 14px;"></i> Email Report</button>
         <button id="sidebarDownloadCsvBtn" class="sidebar-action-btn btn-secondary"
           style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8rem; padding: 10px 12px; border-radius: var(--r-sm); cursor: pointer; color: var(--text-primary); border: 1px solid var(--border-mid); background: var(--bg-elevated);"><i
             data-lucide="download" style="width: 14px; height: 14px;"></i> Download Cleaned CSV</button>
@@ -83,6 +139,9 @@
       <button id="sidebarSettingsBtn" class="btn-secondary"
         style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 12px; border-radius: var(--r-sm); font-size: 0.8rem; background: var(--bg-elevated); border: 1px solid var(--border-mid); color: var(--text-primary); cursor: pointer; transition: all 0.2s;"><i
           data-lucide="settings" style="width: 14px; height: 14px;"></i> Settings</button>
+      <button id="sidebarGuideBtn" class="btn-secondary"
+        style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 12px; border-radius: var(--r-sm); font-size: 0.8rem; background: var(--bg-elevated); border: 1px solid var(--border-mid); color: var(--text-primary); cursor: pointer; transition: all 0.2s;"><i
+          data-lucide="book-open" style="width: 14px; height: 14px;"></i> User Guide</button>
       
       <!-- TOS & GitHub Buttons -->
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
@@ -109,6 +168,19 @@
         </div>
       </div>
       <div class="topbar-right" style="display: flex; align-items: center; gap: 12px; position: relative;">
+        <!-- Floating Analysis Notification Widget (Left of Bell) -->
+        <div id="analysisNotification" class="analysis-notification-toast hidden">
+          <div class="notif-spinner"></div>
+          <div class="notif-content" style="display: flex; flex-direction: column; justify-content: center; min-width: 0; flex: 1;">
+            <div class="notif-title" style="font-size: 0.72rem; font-weight: 700; color: #fff; line-height: 1.1;">Crewlyze Analysis Active</div>
+            <div class="notif-details" style="font-size: 0.62rem; color: var(--text-secondary); margin: 0; line-height: 1.1;"><span id="notifActiveJob">Cleaning...</span> | <span id="notifTimer">00:00</span></div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; margin-left: auto;">
+            <button id="btnMaximizeNotif" class="btn-primary btn-xs" style="padding: 2px 6px; font-size: 0.65rem; font-weight: 600; border-radius: var(--r-sm); height: 20px; line-height: 20px; display: flex; align-items: center;">View</button>
+            <button id="dismissNotif" class="notif-close-btn" style="font-size: 0.95rem; line-height: 1; color: var(--text-muted); background: none; border: none; cursor: pointer; padding: 0 2px;">✕</button>
+          </div>
+        </div>
+
         <!-- Bell Notification Button -->
         <button id="notifBellBtn" class="btn-icon" style="position: relative; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border-mid); display: flex; align-items: center; justify-content: center; cursor: pointer; background: var(--bg-elevated); transition: all 0.2s;">
           <i data-lucide="bell" style="width: 18px; height: 18px; color: var(--text-primary);"></i>
@@ -116,7 +188,7 @@
         </button>
         
         <!-- Bell Notification Dropdown -->
-        <div id="notifDropdown" class="hidden" style="position: absolute; top: 44px; right: 0; width: 320px; background: var(--bg-elevated); border: 1px solid var(--border-mid); border-radius: var(--r-md); box-shadow: var(--shadow-lg); z-index: 999999; display: flex; flex-direction: column; overflow: hidden; text-align: left;">
+        <div id="notifDropdown" class="hidden" style="position: absolute; top: 44px; right: 44px; width: 320px; background: var(--bg-elevated); border: 1px solid var(--border-mid); border-radius: var(--r-md); box-shadow: var(--shadow-lg); z-index: 999999; display: flex; flex-direction: column; overflow: hidden; text-align: left;">
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border-low); background: rgba(255,255,255,0.01);">
             <span style="font-size: 0.85rem; font-weight: 700; color: #fff;">Notifications</span>
             <button id="clearNotifsBtn" style="background: transparent; border: none; font-size: 0.72rem; color: var(--text-secondary); cursor: pointer; text-decoration: underline;">Clear All</button>
@@ -162,17 +234,54 @@
         </div>
       </div>
 
+
+
       <!-- Projects Section -->
       <div class="dashboard-projects-section">
-        <div class="section-title-row">
+        <div class="section-title-row" style="display: flex; align-items: center; gap: 12px;">
           <h2 class="section-title">Recent Projects</h2>
           <span class="projects-count" id="dashboardProjectsCount">(0)</span>
+          <button id="compareProjectsBtn" class="btn-secondary btn-xs" style="margin-left: auto; display: flex; align-items: center; gap: 4px; padding: 5px 12px; font-size: 0.74rem; border-radius: var(--r-sm); cursor: pointer; color: var(--text-secondary); border: 1px solid var(--border-mid); background: var(--bg-elevated);">
+            <i data-lucide="git-compare" style="width: 12px; height: 12px;"></i> Compare
+          </button>
         </div>
         <div class="projects-grid" id="dashboardProjectsGrid">
           <!-- Rendered dynamically via app.js -->
         </div>
       </div>
     </section>
+
+    <!-- ─── COMPARE PROJECTS MODAL ─── -->
+    <div id="compareModal" class="modal-overlay hidden">
+      <div class="modal-box" style="max-width: 800px;">
+        <div class="modal-header">
+          <h2><i data-lucide="git-compare" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;"></i> Compare Projects</h2>
+          <button id="closeCompareModal" class="btn-icon">✕</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-hint">Select two completed projects to compare their metrics and insights side-by-side.</p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+            <div class="field-group">
+              <label class="field-label">Project A</label>
+              <select id="compareProjectA" class="field-input" style="width: 100%;"></select>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Project B</label>
+              <select id="compareProjectB" class="field-input" style="width: 100%;"></select>
+            </div>
+          </div>
+          <button id="runCompareBtn" class="btn-primary" style="width: 100%; padding: 10px; font-weight: 600; cursor: pointer;">
+            <i data-lucide="activity" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i> Compare Now
+          </button>
+          <div id="compareResults" class="hidden" style="margin-top: 20px;">
+            <!-- Delta results rendered here -->
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 12px 24px; border-top: 1px solid var(--border-low);">
+          <button id="cancelCompareBtn" class="btn-secondary">Close</button>
+        </div>
+      </div>
+    </div>
 
     <!-- ─── ANALYSIS CONFIG MODAL ─── -->
     <div id="configModal" class="modal-overlay hidden">
@@ -261,6 +370,52 @@
             <label class="field-label">Report Title</label>
             <input type="text" id="reportTitle" class="field-input"
               placeholder="e.g. Q4 2024 Sales Performance Analysis" />
+          </div>
+
+          <!-- Custom Data Cleaning Rules -->
+          <div class="field-group" style="margin-top: 16px;">
+            <div id="cleaningRulesToggle" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 10px 14px; border: 1px dashed var(--border-mid); border-radius: var(--r-md); background: rgba(255,255,255,0.01); transition: all 0.2s;" onclick="toggleConfigCleaningRules()">
+              <span style="font-size: 0.85rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="brush" style="width: 14px; height: 14px; color: var(--violet-light);"></i> Custom Cleaning Rules (Optional)
+              </span>
+              <i id="cleaningRulesChevron" data-lucide="chevron-down" style="width: 16px; height: 16px; color: var(--text-secondary); transition: transform 0.2s;"></i>
+            </div>
+            
+            <div id="cleaningRulesOptions" class="hidden" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px; padding: 12px 14px; border: 1px solid var(--border-low); border-radius: var(--r-md); background: rgba(0, 0, 0, 0.15);">
+              
+              <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; margin: 0;">
+                <input type="checkbox" id="cleanRuleDateFormat" checked style="margin-top: 3px;" />
+                <div>
+                  <div style="font-size: 0.82rem; font-weight: 600; color: #fff;">Standardize Dates</div>
+                  <div style="font-size: 0.72rem; color: var(--text-secondary);">Convert varying date formats to unified YYYY-MM-DD.</div>
+                </div>
+              </label>
+
+              <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; margin: 0;">
+                <input type="checkbox" id="cleanRuleFillNumeric" checked style="margin-top: 3px;" />
+                <div>
+                  <div style="font-size: 0.82rem; font-weight: 600; color: #fff;">Fill Missing Numbers with Median</div>
+                  <div style="font-size: 0.72rem; color: var(--text-secondary);">Impute numeric blanks automatically using column medians.</div>
+                </div>
+              </label>
+
+              <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; margin: 0;">
+                <input type="checkbox" id="cleanRuleDropDuplicates" checked style="margin-top: 3px;" />
+                <div>
+                  <div style="font-size: 0.82rem; font-weight: 600; color: #fff;">Drop Duplicate Rows</div>
+                  <div style="font-size: 0.72rem; color: var(--text-secondary);">Filter out duplicate row records across the entire dataset.</div>
+                </div>
+              </label>
+
+              <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; margin: 0;">
+                <input type="checkbox" id="cleanRuleStripStrings" checked style="margin-top: 3px;" />
+                <div>
+                  <div style="font-size: 0.82rem; font-weight: 600; color: #fff;">Normalize Whitespaces &amp; Text</div>
+                  <div style="font-size: 0.72rem; color: var(--text-secondary);">Strip outer padding spaces and clean standard text columns.</div>
+                </div>
+              </label>
+
+            </div>
           </div>
         </div>
 
@@ -356,39 +511,35 @@
           </div>
 
           <div class="hub-cards-grid"
-            style="display: flex; gap: 24px; width: 100%; justify-content: center; flex-wrap: wrap; margin-top: 10px;">
+            style="display: flex; gap: 20px; width: 100%; justify-content: center; flex-wrap: wrap; margin-top: 10px;">
             <!-- Card 1: Crew Chat -->
             <div class="hub-card" id="btnEnterChat"
-              style="flex: 1; min-width: 280px; max-width: 360px; background: var(--bg-elevated); border: 1px solid var(--border-mid); border-radius: var(--r-lg); padding: 32px 24px; text-align: center; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; align-items: center; gap: 16px;">
+              style="flex: 1; min-width: 240px; max-width: 320px; background: var(--bg-elevated); border: 1px solid var(--border-mid); border-radius: var(--r-lg); padding: 24px 20px; text-align: center; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; align-items: center; gap: 16px;">
               <div class="hub-card-icon-wrap"
-                style="width: 64px; height: 64px; border-radius: 50%; background: rgba(255, 37, 42, 0.05); display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(255, 37, 42, 0.15);">
-                <img src="/assets/chat_logo.png" alt="Crew Chat Logo" style="width: 48px; height: 48px; object-fit: contain;" />
+                style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255, 37, 42, 0.05); display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(255, 37, 42, 0.15);">
+                <img src="/assets/chat_logo.png" alt="Crew Chat Logo" style="width: 40px; height: 40px; object-fit: contain;" />
               </div>
-              <h3 style="margin: 0; font-size: 1.3rem; font-weight: 700; color: #fff;">Crew Chat</h3>
-              <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.5; margin: 0; flex: 1;">
-                Ask questions, query statistical metrics, run quick data edits, and request tailored interactive
-                visualizations in a conversational interface.
+              <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: #fff;">Crew Chat</h3>
+              <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5; margin: 0; flex: 1;">
+                Ask questions, query statistical metrics, run quick data edits, and request tailored interactive visualizations in a conversational interface.
               </p>
-              <button class="btn-primary"
-                style="display: inline-flex; justify-content: center; align-items: center; text-align: center; pointer-events: none; width: 100%; padding: 10px 0; font-size: 0.85rem; font-weight: 700; background: var(--violet); color: #fff; border: none; transition: transform 0.2s;">Open
-                Chat Workspace</button>
+              <button class="btn-primary btn-sm"
+                style="display: inline-flex; justify-content: center; align-items: center; text-align: center; pointer-events: none; width: 100%; padding: 8px 0; font-size: 0.8rem; font-weight: 700; background: var(--violet); color: #fff; border: none; transition: transform 0.2s;">Open Chat</button>
             </div>
 
             <!-- Card 2: Crew's Analysis -->
             <div class="hub-card" id="btnEnterAgentic"
-              style="flex: 1; min-width: 280px; max-width: 360px; background: var(--bg-elevated); border: 1px solid var(--border-mid); border-radius: var(--r-lg); padding: 32px 24px; text-align: center; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; align-items: center; gap: 16px;">
+              style="flex: 1; min-width: 240px; max-width: 320px; background: var(--bg-elevated); border: 1px solid var(--border-mid); border-radius: var(--r-lg); padding: 24px 20px; text-align: center; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; align-items: center; gap: 16px;">
               <div class="hub-card-icon-wrap"
-                style="width: 64px; height: 64px; border-radius: 50%; background: rgba(255, 255, 255, 0.05); display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.15);">
-                <img src="/assets/logo.png" alt="Crew's Analysis Logo" style="width: 48px; height: 48px; object-fit: contain;" />
+                style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255, 255, 255, 0.05); display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.15);">
+                <img src="/assets/logo.png" alt="Crew's Analysis Logo" style="width: 40px; height: 40px; object-fit: contain;" />
               </div>
-              <h3 style="margin: 0; font-size: 1.3rem; font-weight: 700; color: #fff;">Crew's Analysis</h3>
-              <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.5; margin: 0; flex: 1;">
-                Trigger structured multi-agent pipelines to clean datasets, map schema relationships, generate
-                McKinsey-style recommendations, and build dashboard suites.
+              <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: #fff;">Crew's Analysis</h3>
+              <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5; margin: 0; flex: 1;">
+                Trigger structured multi-agent pipelines to clean datasets, map schema relationships, generate McKinsey-style recommendations, and build dashboard suites.
               </p>
-              <button class="btn-primary"
-                style="display: inline-flex; justify-content: center; align-items: center; text-align: center; pointer-events: none; width: 100%; padding: 10px 0; font-size: 0.85rem; font-weight: 700; background: #ffffff; color: #09090b !important; border: none; transition: transform 0.2s;">Open
-                Agent Workspace</button>
+              <button class="btn-primary btn-sm"
+                style="display: inline-flex; justify-content: center; align-items: center; text-align: center; pointer-events: none; width: 100%; padding: 8px 0; font-size: 0.8rem; font-weight: 700; background: #ffffff; color: #09090b !important; border: none; transition: transform 0.2s;">Open Agent</button>
             </div>
           </div>
         </div>
@@ -446,6 +597,13 @@
             </div>
 
             <div class="chat-input-area" style="position: relative;">
+              <!-- Smart AI Prompt Suggestions -->
+              <div id="chatPromptSuggestions" class="hidden"
+                style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; padding: 8px 10px; background: rgba(139, 92, 246, 0.04); border: 1px dashed rgba(139, 92, 246, 0.2); border-radius: var(--r-md);">
+                <span style="font-size: 0.68rem; color: var(--text-secondary); font-weight: 600; width: 100%; margin-bottom: 2px;">
+                  <i data-lucide="sparkles" style="width: 11px; height: 11px; vertical-align: middle; margin-right: 3px; color: var(--violet-light);"></i> Smart Prompts for your data:
+                </span>
+              </div>
               <div id="colPickerDropdown" class="col-picker-dropdown hidden"
                 style="position: absolute; bottom: 100%; left: 0; right: 0; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-md); z-index: 10; max-height: 160px; overflow-y: auto; padding: 4px;">
               </div>
@@ -532,6 +690,27 @@
             <h3 class="panel-title"><i data-lucide="brush"
                 style="width: 18px; height: 18px; vertical-align: middle; margin-right: 6px;"></i> Data Cleaning Audit
               Trail</h3>
+            
+            <!-- Dataset Diff Viewer -->
+            <div id="datasetDiffCard" class="card hidden" style="margin-bottom: 20px; padding: 16px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-low); border-radius: var(--r-md); box-shadow: var(--shadow-sm);">
+              <h4 style="margin: 0 0 12px 0; color: #fff; font-size: 0.95rem; display: flex; align-items: center; gap: 6px;"><i data-lucide="git-compare" style="width: 16px; height: 16px; color: var(--emerald);"></i> Clean Operations Diff Summary</h4>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 12px;">
+                <div style="background: rgba(0,0,0,0.15); padding: 10px; border-radius: var(--r-sm);">
+                  <div style="font-size: 0.68rem; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase;">Original Shape</div>
+                  <div id="diffOrigShape" style="font-size: 1.1rem; font-weight: 700; color: #fff;">0 x 0</div>
+                </div>
+                <div style="background: rgba(0,0,0,0.15); padding: 10px; border-radius: var(--r-sm);">
+                  <div style="font-size: 0.68rem; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase;">Cleaned Shape</div>
+                  <div id="diffCleanShape" style="font-size: 1.1rem; font-weight: 700; color: #fff;">0 x 0</div>
+                </div>
+                <div style="background: rgba(239, 68, 68, 0.05); padding: 10px; border-radius: var(--r-sm); border: 1px solid rgba(239, 68, 68, 0.1);">
+                  <div style="font-size: 0.68rem; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase;">Rows Dropped</div>
+                  <div id="diffRowsDropped" style="font-size: 1.1rem; font-weight: 700; color: #ef4444;">0</div>
+                </div>
+              </div>
+              <div id="diffChangesList" style="font-size: 0.8rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 6px;"></div>
+            </div>
+            
             <div id="cleaningContent" class="cleaning-list"></div>
           </div>
 
@@ -553,9 +732,12 @@
 
           <!-- CHARTS -->
           <div class="tab-panel" id="panel-charts">
-            <h3 class="panel-title"><i data-lucide="trending-up"
-                style="width: 18px; height: 18px; vertical-align: middle; margin-right: 6px;"></i> Visual Intelligence
-            </h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+              <h3 class="panel-title" style="margin: 0;"><i data-lucide="trending-up"
+                  style="width: 18px; height: 18px; vertical-align: middle; margin-right: 6px;"></i> Visual Intelligence
+              </h3>
+              <button id="toggleGridLayoutBtn" class="btn-secondary btn-sm" style="display: flex; align-items: center; gap: 4px; font-size: 0.75rem;"><i data-lucide="layout-grid" style="width: 14px; height: 14px;"></i> Toggle Grid Layout</button>
+            </div>
             <div id="plotlyChartsWrap" class="charts-grid"></div>
             <div id="pngChartsWrap" class="png-charts-wrap hidden">
               <h4 class="sub-title"><i data-lucide="image"
@@ -578,8 +760,11 @@
             </h3>
             <div id="resultsLogOutput" class="log-output" style="max-height: 550px; overflow-y: auto; padding: 16px; font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.6; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-md);"></div>
           </div>
+          </div>
         </div>
       </div>
+
+
 
       <!-- Export/action bar -->
       <div class="export-bar" style="margin-top: 24px;">
@@ -588,6 +773,18 @@
         <button id="exportZipBtn" class="btn-secondary"
           style="background: rgba(124,58,237,0.06); border-color: var(--violet-light); color: var(--violet-light); font-weight: 600;"><i
             data-lucide="archive" style="width: 14px; height: 14px;"></i> Export Project (.zip)</button>
+        <button id="exportNotebookBtn" class="btn-secondary"
+          style="background: rgba(14,165,233,0.06); border-color: #0ea5e9; color: #0ea5e9; font-weight: 600;"><i
+            data-lucide="file-code" style="width: 14px; height: 14px;"></i> Export Notebook (.ipynb)</button>
+        <button id="shareSlackBtn" class="btn-secondary hidden"
+          style="background: rgba(74,21,75,0.06); border-color: #4a154b; color: #e01e5a; font-weight: 600;"><i
+            data-lucide="slack" style="width: 14px; height: 14px;"></i> Share to Slack</button>
+        <button id="shareDiscordBtn" class="btn-secondary hidden"
+          style="background: rgba(88,101,242,0.06); border-color: #5865f2; color: #5865f2; font-weight: 600;"><i
+            data-lucide="message-square" style="width: 14px; height: 14px;"></i> Share to Discord</button>
+        <button id="emailReportBtn" class="btn-secondary hidden"
+          style="background: rgba(16,185,129,0.06); border-color: #10b981; color: #10b981; font-weight: 600;"><i
+            data-lucide="mail" style="width: 14px; height: 14px;"></i> Email Report</button>
         <button id="downloadCsvBtn" class="btn-secondary"><i data-lucide="download"
             style="width: 14px; height: 14px;"></i> Download Cleaned CSV</button>
         <button id="reRunBtn" class="btn-ghost"><i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
@@ -722,42 +919,710 @@
 
   <!-- Settings Modal -->
   <div id="settingsModal" class="modal-overlay hidden">
-    <div class="modal-box" style="max-width: 500px;">
-      <div class="modal-header">
-        <h2><i data-lucide="settings" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;"></i>
-          API Credentials &amp; Settings</h2>
+    <div class="modal-box" style="width: 1300px; max-width: 95%; padding: 0; display: flex; flex-direction: column; overflow: hidden;">
+      <div class="modal-header" style="padding: 16px 24px; border-bottom: 1px solid var(--border-low);">
+        <h2 style="margin: 0; font-size: 1.2rem; display: flex; align-items: center; gap: 8px;"><i data-lucide="settings" style="width: 20px; height: 20px;"></i> API Credentials &amp; Settings</h2>
         <button id="closeSettingsModal" class="btn-icon">✕</button>
       </div>
 
-      <div class="modal-body"
-        style="display: flex; flex-direction: column; gap: 14px; max-height: 520px; overflow-y: auto; padding-right: 4px;">
-        <p class="modal-hint">Configure API keys for each LLM provider. Keys are saved securely in your browser.
-          Check/uncheck "Show in sidebar" to filter the options on your dashboard.</p>
-
-        <!-- Dynamic Provider Key inputs -->
-        <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center;">
-          <input type="text" id="providerSearchInput" list="providerList" class="field-input" placeholder="Search 100+ litellm providers (e.g. bedrock, vertex_ai)..." style="flex: 1;" />
-          <datalist id="providerList"></datalist>
-          <button id="addProviderBtn" class="btn-primary" style="height: 38px; padding: 0 16px; font-size: 0.82rem; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; margin: 0; border-radius: var(--r-md);">Add Provider</button>
-        </div>
+      <!-- Tabbed container layout -->
+      <div class="modal-body" style="display: flex; flex-direction: row !important; padding: 0; min-height: 480px; overflow: hidden; background: var(--bg-card); flex: 1;">
         
-        <div id="dynamicProvidersList" style="display: flex; flex-direction: column; gap: 14px;">
-          <!-- Dynamically populated via JS -->
+        <!-- Left Sidebar Tabs Menu -->
+        <div class="settings-sidebar-tabs" style="background: rgba(0, 0, 0, 0.25); border-right: 1px solid var(--border-low); display: flex; flex-direction: column; padding: 16px 0; position: relative;">
+          <div class="settings-tab-indicator"></div>
+          
+          <button class="settings-tab-btn active" data-settings-tab="general" style="position: relative; z-index: 1;">
+            <i data-lucide="sliders" style="width: 16px; height: 16px;"></i> General Settings
+          </button>
+          <button class="settings-tab-btn" data-settings-tab="llm" style="position: relative; z-index: 1;">
+            <i data-lucide="key" style="width: 16px; height: 16px;"></i> LLM API Keys
+          </button>
+          <button class="settings-tab-btn" data-settings-tab="integrations" style="position: relative; z-index: 1;">
+            <i data-lucide="shuffle" style="width: 16px; height: 16px;"></i> Integrations
+          </button>
+          <button class="settings-tab-btn" data-settings-tab="features" style="position: relative; z-index: 1;">
+            <i data-lucide="star" style="width: 16px; height: 16px;"></i> System Features
+          </button>
         </div>
 
-        <hr style="border: none; border-top: 1px solid var(--border); margin: 8px 0;" />
+        <!-- Right Content Area -->
+        <div class="settings-content-area">
+          
+          <!-- TAB 1: General Settings -->
+          <div id="settingsTab-general" class="settings-tab-panel">
+            <h4 style="margin: 0 0 12px 0; color: #fff; font-size: 1.1rem; font-weight: 700;">General Settings</h4>
+            <div class="section-help-box">
+              <i data-lucide="info" style="width:16px;height:16px;"></i>
+              <div><strong>About General Settings</strong> — Configure global engine behaviour that applies to all projects. The API cooldown prevents rate-limit errors when the LLM provider throttles rapid requests. Increase this value if you see <em>429 Too Many Requests</em> errors in the log.</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+              <div>
+                <label class="field-label" style="display: block; margin-bottom: 6px; font-weight: 600;">API Cooldown delay: <span
+                    id="settingsCooldownVal">5</span>s
+                  <span class="info-tooltip-trigger" data-tooltip="Rate-limiting delay in seconds applied between successive LLM requests. Use higher cooldowns if you encounter rate-limiting errors."><i data-lucide="info" style="width: 12.5px; height: 12.5px; display: inline-block; vertical-align: middle; margin-left: 4px; opacity: 0.6; cursor: help;"></i></span>
+                </label>
+                <input type="range" id="settingsCooldown" class="field-range" min="0" max="60" value="5" />
+                <span style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 4px;">Rate-limiting delay between concurrent API requests. Increases stability against provider throttle limits.</span>
+              </div>
 
-        <!-- Cooldown -->
-        <div>
-          <label class="field-label" style="display: block; margin-bottom: 6px;">API Cooldown: <span
-              id="settingsCooldownVal">5</span>s</label>
-          <input type="range" id="settingsCooldown" class="field-range" min="0" max="60" value="5" />
+              <div>
+                <label class="field-label" style="display: block; margin-bottom: 6px; font-weight: 600;">Console Log Level
+                  <span class="info-tooltip-trigger" data-tooltip="Set logging detail level for the stdout.log and live event panel."><i data-lucide="info" style="width: 12.5px; height: 12.5px; display: inline-block; vertical-align: middle; margin-left: 4px; opacity: 0.6; cursor: help;"></i></span>
+                </label>
+                <select id="settingsLogLevel" class="field-select" style="max-width: 200px;">
+                  <option value="INFO">INFO</option>
+                  <option value="DEBUG">DEBUG</option>
+                  <option value="ERROR">ERROR</option>
+                </select>
+                <span style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 4px;">Controls how much information is streamed during execution.</span>
+              </div>
+              
+              <div>
+                <label class="field-label" style="display: block; margin-bottom: 6px; font-weight: 600;">Workspace Storage Dir
+                  <span class="info-tooltip-trigger" data-tooltip="Local machine path where all files, PDF reports, zip backups, and session metadata are persistently saved."><i data-lucide="info" style="width: 12.5px; height: 12.5px; display: inline-block; vertical-align: middle; margin-left: 4px; opacity: 0.6; cursor: help;"></i></span>
+                </label>
+                <input type="text" id="settingsStorageDir" class="field-input" placeholder="e.g. ~/.crewlyze/data" />
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: LLM API Keys -->
+          <div id="settingsTab-llm" class="settings-tab-panel hidden">
+            <h4 style="margin: 0 0 12px 0; color: #fff; font-size: 1.1rem; font-weight: 700;">LLM Provider Credentials</h4>
+            <div class="section-help-box">
+              <i data-lucide="key" style="width:16px;height:16px;"></i>
+              <div><strong>How to set up LLM Keys</strong> — Crewlyze supports <strong>100+ providers</strong> via LiteLLM (OpenAI, Gemini, Anthropic, Mistral, Ollama, Bedrock, and more). Enter your API key for the provider you want to use and check <em>Show in sidebar</em> to make it selectable when running analysis. Keys are stored locally in your browser and are never sent to any Crewlyze server — only to the LLM provider's endpoint directly.</div>
+            </div>
+            
+            <div style="margin-bottom: 16px;">
+              <label class="field-label" style="display: block; margin-bottom: 6px; font-weight: 600;">Add Custom LLM Provider
+                <span class="info-tooltip-trigger" data-tooltip="Search and add custom LiteLLM providers (e.g. perplexity, vertex_ai, deepseek, together) to your sidebar list."><i data-lucide="info" style="width: 12.5px; height: 12.5px; display: inline-block; vertical-align: middle; margin-left: 4px; opacity: 0.6; cursor: help;"></i></span>
+              </label>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="text" id="providerSearchInput" list="providerList" class="field-input" placeholder="Search 100+ litellm providers (e.g. bedrock, vertex_ai)..." style="flex: 1;" />
+                <datalist id="providerList"></datalist>
+                <button id="addProviderBtn" class="btn-primary" style="height: 38px; padding: 0 16px; font-size: 0.82rem; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; margin: 0; border-radius: var(--r-md);">Add Provider</button>
+              </div>
+            </div>
+            
+            <div id="dynamicProvidersList" style="display: flex; flex-direction: column; gap: 14px;">
+              <!-- Dynamically populated via JS -->
+            </div>
+          </div>
+
+          <!-- TAB 3: Integrations & Automations -->
+          <div id="settingsTab-integrations" class="settings-tab-panel hidden">
+            <h4 style="margin: 0 0 12px 0; color: #fff; font-size: 1.1rem; font-weight: 700;">Automated Outbound Integrations</h4>
+            <div class="section-help-box">
+              <i data-lucide="zap" style="width:16px;height:16px;"></i>
+              <div><strong>Why use Integrations?</strong> — Once configured and enabled, Crewlyze automatically delivers analysis results the moment a pipeline finishes — no manual export needed. You can send the summary to a <strong>Slack channel</strong>, post an embed to <strong>Discord</strong>, deliver a PDF report via <strong>SMTP email</strong>, or hit any <strong>REST API endpoint</strong>. Enable each channel by saving valid credentials below — the Share button will then appear on your project cards.</div>
+            </div>
+            
+            <!-- Grid of Mini Integration Cards inside modal -->
+            <div class="modal-integrations-tabs" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px;">
+              <button class="modal-int-tab-btn active" data-int-type="email" style="flex: 1;">
+                <i data-lucide="mail" style="width: 14px; height: 14px;"></i> SMTP
+              </button>
+              <button class="modal-int-tab-btn" data-int-type="slack" style="flex: 1;">
+                <i data-lucide="slack" style="width: 14px; height: 14px;"></i> Slack
+              </button>
+              <button class="modal-int-tab-btn" data-int-type="discord" style="flex: 1;">
+                <i data-lucide="message-square" style="width: 14px; height: 14px;"></i> Discord
+              </button>
+              <button class="modal-int-tab-btn" data-int-type="webhook" style="flex: 1;">
+                <i data-lucide="link" style="width: 14px; height: 14px;"></i> Webhook
+              </button>
+            </div>
+
+            <!-- SMTP Config Panel -->
+            <div id="modalIntPanel-email" class="modal-int-panel">
+              <h5 style="margin: 0 0 12px 0; color: #fff; font-size: 0.92rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="mail" style="color: var(--emerald); width: 16px; height: 16px;"></i> Email SMTP Accounts
+              </h5>
+              
+              <!-- List of Saved SMTP Accounts -->
+              <div id="intSmtpAccountsList" style="margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.15); padding: 8px; border-radius: var(--r-sm); border: 1px solid var(--border-low);">
+                <div style="font-size: 0.75rem; color: var(--text-secondary); text-align: center; padding: 12px;">No SMTP accounts configured yet.</div>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--border-low); padding-top: 12px;">
+                <span id="smtpFormTitle" style="font-size: 0.75rem; font-weight: 700; color: #fff; display: block; margin-bottom: 2px;">Add SMTP Account:</span>
+                <input type="hidden" id="intSmtpAccountId" value="" />
+                
+                <div>
+                  <label class="field-label" style="font-size: 0.72rem; margin-bottom: 4px; display: block;">Account Friendly Name</label>
+                  <input type="text" id="intSmtpAccountName" class="field-input" placeholder="e.g. Corporate Gmail, SendGrid SMTP" />
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                  <div style="flex: 1;">
+                    <label class="field-label" style="font-size: 0.72rem; margin-bottom: 4px; display: block;">SMTP Host
+                      <span class="info-tooltip-trigger" data-tooltip="Target SMTP server address (e.g. smtp.gmail.com)."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                    </label>
+                    <input type="text" id="intSmtpHost" class="field-input" placeholder="smtp.gmail.com" />
+                  </div>
+                  <div style="width: 90px;">
+                    <label class="field-label" style="font-size: 0.72rem; margin-bottom: 4px; display: block;">Port
+                      <span class="info-tooltip-trigger" data-tooltip="Standard port values: 465 (SSL/TLS) or 587 (STARTTLS)."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                    </label>
+                    <input type="number" id="intSmtpPort" class="field-input" placeholder="587" />
+                  </div>
+                </div>
+                <div>
+                  <label class="field-label" style="font-size: 0.72rem; margin-bottom: 4px; display: block;">Username / Account email
+                    <span class="info-tooltip-trigger" data-tooltip="SMTP account username or sender email address."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                  </label>
+                  <input type="text" id="intSmtpUser" class="field-input" placeholder="e.g. sender@gmail.com" />
+                </div>
+                <div>
+                  <label class="field-label" style="font-size: 0.72rem; margin-bottom: 4px; display: block;">SMTP Password
+                    <span class="info-tooltip-trigger" data-tooltip="SMTP login password or app-specific security token."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                  </label>
+                  <input type="password" id="intSmtpPassword" class="field-input" placeholder="Password or app-specific key" />
+                </div>
+                <div style="display: flex; gap: 10px;">
+                  <div style="flex: 1;">
+                    <label class="field-label" style="font-size: 0.72rem; margin-bottom: 4px; display: block;">Sender Email
+                      <span class="info-tooltip-trigger" data-tooltip="Address appearing as the 'From' sender (defaults to account email)."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                    </label>
+                    <input type="text" id="intSmtpSender" class="field-input" placeholder="alerts@company.com" />
+                  </div>
+                  <div style="flex: 1;">
+                    <label class="field-label" style="font-size: 0.72rem; margin-bottom: 4px; display: block;">Default Recipient
+                      <span class="info-tooltip-trigger" data-tooltip="List of stakeholder email addresses to receive reports."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                    </label>
+                    <input type="text" id="intSmtpRecipient" class="field-input" placeholder="ceo@company.com, admin@..." />
+                  </div>
+                </div>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; margin-top: 4px; user-select: none;">
+                  <input type="checkbox" id="intSmtpSecure" checked /> Force SSL/TLS secure connection
+                  <span class="info-tooltip-trigger" data-tooltip="Enforce secure TLS connections. Keep checked for Gmail or SSL port 465."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                </label>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                  <button id="saveIntEmailBtn" class="btn-primary btn-sm" style="flex: 1;">Save Account</button>
+                  <button id="testIntEmailBtn" class="btn-secondary btn-sm" style="flex: 1; border-color: var(--emerald); color: var(--emerald);"><i data-lucide="send" style="width:12px; height:12px; vertical-align:middle; margin-right:4px;"></i> Test Account</button>
+                  <button id="cancelEditSmtpBtn" class="btn-secondary btn-sm hidden" style="flex: 0.5;">Cancel</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Slack Config Panel -->
+            <div id="modalIntPanel-slack" class="modal-int-panel hidden">
+              <h5 style="margin: 0 0 12px 0; color: #fff; font-size: 0.92rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="slack" style="color: #e01e5a; width: 16px; height: 16px;"></i> Slack Webhook URL
+              </h5>
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.8rem; font-weight: 600; color: #fff; cursor: pointer; user-select: none; margin-bottom: 4px;">
+                  <input type="checkbox" id="intSlackEnabled" /> Enable Slack Automation
+                </label>
+                <div>
+                  <label class="field-label" style="font-size: 0.72rem; margin-bottom: 4px; display: block;">Slack Hook URL
+                    <span class="info-tooltip-trigger" data-tooltip="Incoming webhook URL generated in Slack App directory configurations."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                  </label>
+                  <input type="text" id="intSlackWebhookUrl" class="field-input" placeholder="https://hooks.slack.com/services/..." />
+                </div>
+                
+                <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 6px; background: rgba(0,0,0,0.12); padding: 8px 12px; border-radius: var(--r-sm); border: 1px solid var(--border-low);">
+                  <span style="font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 2px; display: block;">Slack Deliverables:</span>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                    <input type="checkbox" id="intSlackSendSummary" checked /> Send Executive observations card
+                    <span class="info-tooltip-trigger" data-tooltip="Posts a text message with summary metrics and observations to the Slack channel."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                  </label>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                  <button id="saveIntSlackBtn" class="btn-primary btn-sm" style="flex: 1;">Save Slack</button>
+                  <button id="testIntSlackBtn" class="btn-secondary btn-sm" style="flex: 1; border-color: var(--violet-light); color: var(--violet-light);"><i data-lucide="send" style="width:12px; height:12px; vertical-align:middle; margin-right:4px;"></i> Test Connection</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Discord Config Panel -->
+            <div id="modalIntPanel-discord" class="modal-int-panel hidden">
+              <h5 style="margin: 0 0 12px 0; color: #fff; font-size: 0.92rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="message-square" style="color: #5865f2; width: 16px; height: 16px;"></i> Discord Webhook Config
+              </h5>
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.8rem; font-weight: 600; color: #fff; cursor: pointer; user-select: none; margin-bottom: 4px;">
+                  <input type="checkbox" id="intDiscordEnabled" /> Enable Discord Webhook
+                </label>
+                <div>
+                  <label class="field-label" style="font-size: 0.72rem; margin-bottom: 4px; display: block;">Channel Mode</label>
+                  <select id="intDiscordChannelMode" class="field-input">
+                    <option value="same">Same Channel (Consolidated)</option>
+                    <option value="separate">Separate Channels (Targeted)</option>
+                  </select>
+                </div>
+
+                <!-- Single Channel Section -->
+                <div id="discordSingleChannelGroup">
+                  <label class="field-label" style="font-size: 0.72rem; margin-bottom: 4px; display: block;">Discord Webhook URL
+                    <span class="info-tooltip-trigger" data-tooltip="URL created in Discord Channel Settings -> Integrations -> Webhooks."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                  </label>
+                  <input type="text" id="intDiscordWebhookUrl" class="field-input" placeholder="https://discord.com/api/webhooks/..." />
+                </div>
+
+                <!-- Separate Channels Section -->
+                <div id="discordSeparateChannelsGroup" class="hidden" style="display: flex; flex-direction: column; gap: 10px; border-left: 2px solid var(--violet-light); padding-left: 10px; margin-top: 4px;">
+                  <div>
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; font-weight: 600; color: #fff;">
+                      <input type="checkbox" id="intDiscordCleaningEnabled" /> 🧹 Data Cleaning Webhook URL
+                    </label>
+                    <input type="text" id="intDiscordCleaningUrl" class="field-input" style="margin-top: 4px;" placeholder="https://discord.com/api/webhooks/..." />
+                  </div>
+                  <div>
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; font-weight: 600; color: #fff;">
+                      <input type="checkbox" id="intDiscordRelationsEnabled" /> 🔗 Relationship Mapper Webhook URL
+                    </label>
+                    <input type="text" id="intDiscordRelationsUrl" class="field-input" style="margin-top: 4px;" placeholder="https://discord.com/api/webhooks/..." />
+                  </div>
+                  <div>
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; font-weight: 600; color: #fff;">
+                      <input type="checkbox" id="intDiscordInsightsEnabled" /> 💡 Business Analysis Webhook URL
+                    </label>
+                    <input type="text" id="intDiscordInsightsUrl" class="field-input" style="margin-top: 4px;" placeholder="https://discord.com/api/webhooks/..." />
+                  </div>
+                  <div>
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; font-weight: 600; color: #fff;">
+                      <input type="checkbox" id="intDiscordVisualizationEnabled" /> 📊 Visualizations Webhook URL
+                    </label>
+                    <input type="text" id="intDiscordVisualizationUrl" class="field-input" style="margin-top: 4px;" placeholder="https://discord.com/api/webhooks/..." />
+                  </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px;">
+                  <div style="flex: 1;">
+                    <label class="field-label" style="font-size: 0.72rem; margin-bottom: 4px; display: block;">Bot Username Override
+                      <span class="info-tooltip-trigger" data-tooltip="Display username of the bot poster (defaults to webhook name)."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                    </label>
+                    <input type="text" id="intDiscordUsername" class="field-input" placeholder="e.g. Crewlyze Bot" />
+                  </div>
+                  <div style="flex: 1;">
+                    <label class="field-label" style="font-size: 0.72rem; margin-bottom: 4px; display: block;">Bot Avatar URL
+                      <span class="info-tooltip-trigger" data-tooltip="Profile avatar image override URL."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                    </label>
+                    <input type="text" id="intDiscordAvatar" class="field-input" placeholder="https://domain.com/avatar.png" />
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; align-items: flex-end;">
+                  <div style="flex: 1;">
+                    <label class="field-label" style="font-size: 0.72rem; margin-bottom: 4px; display: block;">Embed Accent Color
+                      <span class="info-tooltip-trigger" data-tooltip="Accent side border color of the Discord embed block."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                    </label>
+                    <div style="display: flex; gap: 6px;">
+                      <input type="color" id="intDiscordColorPicker" value="#5865F2" style="width: 38px; height: 38px; border: 1px solid var(--border-mid); border-radius: var(--r-sm); background: transparent; cursor: pointer; padding: 2px;" />
+                      <input type="text" id="intDiscordColor" class="field-input" placeholder="#5865F2" value="#5865F2" style="flex: 1;" />
+                    </div>
+                  </div>
+                  <div style="flex: 1;">
+                    <label class="field-label" style="font-size: 0.72rem; margin-bottom: 4px; display: block;">Alert Mention Ping
+                      <span class="info-tooltip-trigger" data-tooltip="Pings roles/users (e.g. @everyone or @here) on analysis completion."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                    </label>
+                    <input type="text" id="intDiscordMention" class="field-input" placeholder="e.g. @everyone or @here" />
+                  </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px; background: rgba(0,0,0,0.12); padding: 8px 12px; border-radius: var(--r-sm); border: 1px solid var(--border-low);">
+                  <span style="font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 2px; display: block;">Discord Deliverables &amp; Content:</span>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                    <input type="checkbox" id="intDiscordSendSummary" checked /> Send Executive observations card
+                    <span class="info-tooltip-trigger" data-tooltip="Posts a text message with summary metrics and observations to the Discord channel."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                    <input type="checkbox" id="intDiscordAttachPdf" checked /> Attach full PDF report file
+                    <span class="info-tooltip-trigger" data-tooltip="Uploads the complete multi-page PDF report as an attachment in the Discord thread."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                    <input type="checkbox" id="intDiscordAttachCharts" /> Attach generated PNG visuals (up to 3)
+                    <span class="info-tooltip-trigger" data-tooltip="Uploads the individual correlation heatmap and summary chart image files directly to Discord."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                    <input type="checkbox" id="intDiscordToggleStats" checked /> Include dataset shape details
+                    <span class="info-tooltip-trigger" data-tooltip="Prepends row count, column count, and size metrics parameters to the Discord description embed."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                    <input type="checkbox" id="intDiscordToggleWarnings" checked /> Include risk alerts and anomalies summaries
+                    <span class="info-tooltip-trigger" data-tooltip="Includes flagged outlier summaries and anomaly counts in the main Discord text block."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                  </label>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                  <button id="saveIntDiscordBtn" class="btn-primary btn-sm" style="flex: 1;">Save Discord</button>
+                  <button id="testIntDiscordBtn" class="btn-secondary btn-sm" style="flex: 1; border-color: #5865f2; color: #5865f2;"><i data-lucide="send" style="width:12px; height:12px; vertical-align:middle; margin-right:4px;"></i> Test Connection</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Custom Webhook Config Panel -->
+            <div id="modalIntPanel-webhook" class="modal-int-panel hidden">
+              <h5 style="margin: 0 0 12px 0; color: #fff; font-size: 0.92rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="link" style="color: var(--cyan); width: 16px; height: 16px;"></i> Custom REST Webhook
+              </h5>
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.8rem; font-weight: 600; color: #fff; cursor: pointer; user-select: none; margin-bottom: 4px;">
+                  <input type="checkbox" id="intWebhookEnabled" /> Enable Webhook Automation
+                </label>
+                <div>
+                  <label class="field-label" style="font-size: 0.72rem; margin-bottom: 4px; display: block;">Destination API Endpoint (POST)
+                    <span class="info-tooltip-trigger" data-tooltip="URL endpoint to post JSON metadata and PDF file multipart uploads."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                  </label>
+                  <input type="text" id="intOutboundWebhookUrl" class="field-input" placeholder="https://api.yourcompany.com/v1/webhooks" />
+                </div>
+                
+                <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 6px; background: rgba(0,0,0,0.12); padding: 8px 12px; border-radius: var(--r-sm); border: 1px solid var(--border-low);">
+                  <span style="font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 2px; display: block;">Webhook Deliverables:</span>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                    <input type="checkbox" id="intWebhookSendJson" checked /> Post metadata JSON payload
+                    <span class="info-tooltip-trigger" data-tooltip="Sends session metadata, cleaning logs, and insight text as a JSON request body."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                    <input type="checkbox" id="intWebhookAttachPdf" checked /> Post full PDF report file (multipart)
+                    <span class="info-tooltip-trigger" data-tooltip="Sends the compiled PDF report as a multipart file field upload."><i data-lucide="info" style="width: 11px; height: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; cursor: help;"></i></span>
+                  </label>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                  <button id="saveIntWebhookBtn" class="btn-primary btn-sm" style="flex: 1;">Save Webhook</button>
+                  <button id="testIntWebhookBtn" class="btn-secondary btn-sm" style="flex: 1; border-color: var(--cyan); color: var(--cyan);"><i data-lucide="send" style="width:12px; height:12px; vertical-align:middle; margin-right:4px;"></i> Test Connection</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- TAB 4: System Features -->
+          <div id="settingsTab-features" class="settings-tab-panel hidden">
+            <h4 style="margin: 0 0 12px 0; color: #fff; font-size: 1.1rem; font-weight: 700;">Sidebar Action Features</h4>
+            <div class="section-help-box">
+              <i data-lucide="info" style="width:16px;height:16px;"></i>
+              <div><strong>Sidebar Actions Configurator</strong> — Customize which action buttons show up in your project sidebar. Toggles take effect immediately when you save settings.</div>
+            </div>
+            
+            <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 10px;">
+              
+              <!-- Toggle 1: Export PDF -->
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(255, 255, 255, 0.01); border: 1px solid var(--border-low); border-radius: var(--r-md);">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 36px; height: 36px; border-radius: var(--r-sm); background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); display: flex; align-items: center; justify-content: center;">
+                    <i data-lucide="file-text" style="width: 16px; height: 16px; color: var(--rose);"></i>
+                  </div>
+                  <div>
+                    <div style="font-size: 0.85rem; font-weight: 700; color: #fff;">Export PDF Report</div>
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">Show button to export project summaries as professional PDF files.</div>
+                  </div>
+                </div>
+                <label class="switch-toggle">
+                  <input type="checkbox" id="featExportPdf" />
+                  <span class="slider-round"></span>
+                </label>
+              </div>
+
+              <!-- Toggle 2: Export Notebook -->
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(255, 255, 255, 0.01); border: 1px solid var(--border-low); border-radius: var(--r-md);">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 36px; height: 36px; border-radius: var(--r-sm); background: rgba(14, 165, 233, 0.08); border: 1px solid rgba(14, 165, 233, 0.2); display: flex; align-items: center; justify-content: center;">
+                    <i data-lucide="file-code" style="width: 16px; height: 16px; color: #0ea5e9;"></i>
+                  </div>
+                  <div>
+                    <div style="font-size: 0.85rem; font-weight: 700; color: #fff;">Export Jupyter Notebook</div>
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">Show button to export chart scripts as a Jupyter Notebook (.ipynb).</div>
+                  </div>
+                </div>
+                <label class="switch-toggle">
+                  <input type="checkbox" id="featExportNotebook" />
+                  <span class="slider-round"></span>
+                </label>
+              </div>
+
+              <!-- Toggle 3: Re-run Analysis -->
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(255, 255, 255, 0.01); border: 1px solid var(--border-low); border-radius: var(--r-md);">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 36px; height: 36px; border-radius: var(--r-sm); background: rgba(255, 37, 42, 0.08); border: 1px solid rgba(255, 37, 42, 0.2); display: flex; align-items: center; justify-content: center;">
+                    <i data-lucide="refresh-cw" style="width: 16px; height: 16px; color: var(--violet-light);"></i>
+                  </div>
+                  <div>
+                    <div style="font-size: 0.85rem; font-weight: 700; color: #fff;">Re-run Analysis</div>
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">Show button to re-trigger analysis pipelines on the dataset.</div>
+                  </div>
+                </div>
+                <label class="switch-toggle">
+                  <input type="checkbox" id="featReRun" />
+                  <span class="slider-round"></span>
+                </label>
+              </div>
+
+              <!-- Toggle 4: Share to Discord -->
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(255, 255, 255, 0.01); border: 1px solid var(--border-low); border-radius: var(--r-md);">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 36px; height: 36px; border-radius: var(--r-sm); background: rgba(88, 101, 242, 0.08); border: 1px solid rgba(88, 101, 242, 0.2); display: flex; align-items: center; justify-content: center;">
+                    <i data-lucide="message-square" style="width: 16px; height: 16px; color: #5865f2;"></i>
+                  </div>
+                  <div>
+                    <div style="font-size: 0.85rem; font-weight: 700; color: #fff;">Share to Discord</div>
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">Show button to post report embeds to Discord (only visible if webhook URL is valid).</div>
+                  </div>
+                </div>
+                <label class="switch-toggle">
+                  <input type="checkbox" id="featShareDiscord" />
+                  <span class="slider-round"></span>
+                </label>
+              </div>
+
+              <!-- Toggle 5: Download CSV -->
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(255, 255, 255, 0.01); border: 1px solid var(--border-low); border-radius: var(--r-md);">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 36px; height: 36px; border-radius: var(--r-sm); background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); display: flex; align-items: center; justify-content: center;">
+                    <i data-lucide="download" style="width: 16px; height: 16px; color: var(--emerald);"></i>
+                  </div>
+                  <div>
+                    <div style="font-size: 0.85rem; font-weight: 700; color: #fff;">Download Cleaned CSV</div>
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">Show button to download the cleaned, auto-healed CSV file.</div>
+                  </div>
+                </div>
+                <label class="switch-toggle">
+                  <input type="checkbox" id="featDownloadCsv" />
+                  <span class="slider-round"></span>
+                </label>
+              </div>
+
+            </div>
+          </div>
+
         </div>
+
       </div>
 
-      <div class="modal-footer">
-        <button id="cancelSettingsBtn" class="btn-secondary">Close</button>
+      <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-low);">
+        <button id="cancelSettingsBtn" class="btn-secondary">Close Settings</button>
         <button id="saveSettingsBtn" class="btn-primary">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Guide Modal -->
+  <div id="guideModal" class="modal-overlay hidden">
+    <div class="modal-box" style="width: 1300px; max-width: 95%; padding: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-card); border: 1px solid var(--border-low); box-shadow: var(--shadow-lg); max-height: 90vh;">
+      <div class="modal-header" style="padding: 16px 24px; border-bottom: 1px solid var(--border-low); display: flex; align-items: center; justify-content: space-between;">
+        <h2 style="margin: 0; font-size: 1.2rem; display: flex; align-items: center; gap: 8px;"><i data-lucide="book-open" style="width: 20px; height: 20px; color: var(--violet-light);"></i> Crewlyze Enterprise Technical Manual</h2>
+        <button id="closeGuideModal" class="btn-icon">✕</button>
+      </div>
+      
+      <!-- Tabbed container layout -->
+      <div class="modal-body" style="display: flex; flex-direction: row !important; padding: 0; min-height: 520px; overflow: hidden; background: var(--bg-card); flex: 1; text-align: left;">
+        
+        <!-- Left Sidebar Tabs Menu -->
+        <div class="guide-sidebar-tabs" style="background: rgba(0, 0, 0, 0.25); border-right: 1px solid var(--border-low); display: flex; flex-direction: column; padding: 16px 0; position: relative; width: 260px; flex-shrink: 0; overflow-y: auto; gap: 4px;">
+          <div style="padding: 0 16px 12px; border-bottom: 1px solid var(--border-low); margin-bottom: 12px;">
+            <input type="text" id="docsSearchInput" class="field-input" placeholder="Search manual..." style="width: 100%; font-size: 0.78rem; padding: 6px 10px;" />
+          </div>
+          
+          <button class="guide-modal-tab-btn active" data-guide-tab="overview">
+            <i data-lucide="play-circle" style="width: 16px; height: 16px;"></i> Platform Overview
+          </button>
+          <button class="guide-modal-tab-btn" data-guide-tab="crew">
+            <i data-lucide="users" style="width: 16px; height: 16px;"></i> CrewAI Orchestration
+          </button>
+          <button class="guide-modal-tab-btn" data-guide-tab="analysis">
+            <i data-lucide="trending-up" style="width: 16px; height: 16px;"></i> Ingestion &amp; Pipelines
+          </button>
+          <button class="guide-modal-tab-btn" data-guide-tab="copilot">
+            <i data-lucide="terminal" style="width: 16px; height: 16px;"></i> Chat AI &amp; SQL Copilot
+          </button>
+          <button class="guide-modal-tab-btn" data-guide-tab="sandboxing">
+            <i data-lucide="shield" style="width: 16px; height: 16px;"></i> Security &amp; Sandboxing
+          </button>
+          <button class="guide-modal-tab-btn" data-guide-tab="gateways">
+            <i data-lucide="key" style="width: 16px; height: 16px;"></i> Cloud &amp; Local LLMs
+          </button>
+          <button class="guide-modal-tab-btn" data-guide-tab="cooldown">
+            <i data-lucide="hourglass" style="width: 16px; height: 16px;"></i> Cooldowns &amp; Throttling
+          </button>
+          <button class="guide-modal-tab-btn" data-guide-tab="integrations">
+            <i data-lucide="shuffle" style="width: 16px; height: 16px;"></i> Integrations Hub
+          </button>
+          <button class="guide-modal-tab-btn" data-guide-tab="exports">
+            <i data-lucide="download" style="width: 16px; height: 16px;"></i> Export Formats &amp; ZIP
+          </button>
+          <button class="guide-modal-tab-btn" data-guide-tab="troubleshooting">
+            <i data-lucide="help-circle" style="width: 16px; height: 16px;"></i> FAQ &amp; Troubleshooting
+          </button>
+        </div>
+
+        <!-- Right Content Area -->
+        <div class="guide-content-area" style="flex: 1; padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px;">
+          
+          <!-- TAB 1: Platform Overview -->
+          <div id="guideTab-overview" class="guide-modal-panel active">
+            <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;"><i data-lucide="play-circle" style="color: var(--violet-light);"></i> Platform Vision &amp; Architecture</h4>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; display: flex; flex-direction: column; gap: 12px;">
+              <p>Crewlyze is an **Autonomous Multi-Agent Business Intelligence and Data Engineering Platform**. Unlike traditional static tools that run scripted sequence statements, Crewlyze models a collaborative human data department using role-specific AI agents that share context, self-correct errors, and execute sandboxed code.</p>
+              <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-low); border-radius: var(--r-md); padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="font-weight: 600; color: #fff; font-size: 0.85rem;">Core Features:</div>
+                <ul style="margin-left: 18px; display: flex; flex-direction: column; gap: 6px;">
+                  <li><strong>Multi-Agent Swarm Orchestration</strong>: Built using CrewAI for agent scheduling and tasks execution.</li>
+                  <li><strong>Dynamic Delimiter Auto-Healing</strong>: Intelligently handles diverse formats (commas, semicolons, tabs) without user configuration.</li>
+                  <li><strong>Natural Language-to-SQL Compiler</strong>: Talk directly to your SQLite database tables.</li>
+                  <li><strong>Outbound Webhook Channels</strong>: Dispatch reports dynamically to SMTP Email, Slack, Discord, and Custom REST Endpoints.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: CrewAI Orchestration -->
+          <div id="guideTab-crew" class="guide-modal-panel">
+            <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;"><i data-lucide="users" style="color: var(--cyan);"></i> CrewAI Swarm &amp; Agent Personas</h4>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; display: flex; flex-direction: column; gap: 12px;">
+              <p>The platform assigns distinct, cooperative personas to execute your data analysis tasks:</p>
+              
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-low); border-radius: var(--r-md); padding: 12px;">
+                  <strong style="color: #fff; font-size: 0.85rem;">1. Data Quality &amp; Profiling Agent (cleaner.py)</strong>
+                  <p style="margin-top: 4px; font-size: 0.8rem;">Evaluates dataset structural health. It drops columns containing more than 60% missing values, infers standard types, standardizes headers (removing spaces/special symbols), and imputes numeric empty fields (NaN) with means/medians based on standard deviation skewness. Writes a structured cleaning log detailing changes.</p>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-low); border-radius: var(--r-md); padding: 12px;">
+                  <strong style="color: #fff; font-size: 0.85rem;">2. Relationship &amp; Correlation Analyst (relation.py)</strong>
+                  <p style="margin-top: 4px; font-size: 0.8rem;">Maps bivariate and multivariable data relationships. Calculates Pearson linear indices and Spearman rank correlations (detecting non-linear curves). Also runs analysis of variance (ANOVA) tests on categorical attributes to locate statistically significant drivers.</p>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-low); border-radius: var(--r-md); padding: 12px;">
+                  <strong style="color: #fff; font-size: 0.85rem;">3. McKinsey Strategy Consultant (insights.py)</strong>
+                  <p style="margin-top: 4px; font-size: 0.8rem;">Translates raw numerical correlations and statistics into strategic action. Generates SWOT matrices, highlights critical operational bottleneck risks, models growth ROI, and writes C-suite action checklists.</p>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-low); border-radius: var(--r-md); padding: 12px;">
+                  <strong style="color: #fff; font-size: 0.85rem;">4. Plotly Chart Engineer (visualizer.py)</strong>
+                  <p style="margin-top: 4px; font-size: 0.8rem;">Reads dataset metadata and dynamically compiles Python scripts to build responsive Plotly visualizations. It outputs HTML/SVG chart snippets rendered directly on your UI dashboard.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3: Ingestion & Pipelines -->
+          <div id="guideTab-analysis" class="guide-modal-panel">
+            <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;"><i data-lucide="trending-up" style="color: #10b981;"></i> Ingestion Engines &amp; Analysis Modes</h4>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; display: flex; flex-direction: column; gap: 12px;">
+              <p>Crewlyze supports multi-format file parser pipelines and multiple processing speeds:</p>
+              
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-low); border-radius: var(--r-md); padding: 12px;">
+                  <strong style="color: #fff; font-size: 0.85rem;">Fast (Standard) Execution Mode</strong>
+                  <p style="margin-top: 4px; font-size: 0.8rem;">Optimized for speed. Agents run single-turn prompts with fewer structural reflections. It skips complex nested analyses, providing rapid sanitization logs and standard chart dashboards in seconds.</p>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-low); border-radius: var(--r-md); padding: 12px;">
+                  <strong style="color: #fff; font-size: 0.85rem;">Deep Execution Mode</strong>
+                  <p style="margin-top: 4px; font-size: 0.8rem;">Forces multi-pass reasoning. Agents evaluate dataset edge-cases, perform extensive outlier checks, audit multivariable interactions, and execute self-correcting logic on visual outputs to draft highly detailed reports.</p>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-low); border-radius: var(--r-md); padding: 12px;">
+                  <strong style="color: #fff; font-size: 0.85rem;">Ingestion &amp; Delimiter Healing</strong>
+                  <p style="margin-top: 4px; font-size: 0.8rem;">On CSV uploads, the backend analyzes the first 50 lines to detect separators (`,`, `;`, `\t`, `|`). If Excel workbooks have multiple sheets, a tab picker allows selecting the target. Ingesting SQLite database files extracts schemas and lets the user choose target tables dynamically.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 4: Chat AI & SQL Copilot -->
+          <div id="guideTab-copilot" class="guide-modal-panel">
+            <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;"><i data-lucide="terminal" style="color: var(--cyan);"></i> Chat AI &amp; SQL Copilot</h4>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; display: flex; flex-direction: column; gap: 12px;">
+              <p>Interact with your dataset dynamically using our conversational SQL copilot:</p>
+              <ul style="margin-left: 18px; display: flex; flex-direction: column; gap: 8px;">
+                <li><strong>NLP-to-SQL Compilation</strong>: Ask questions in plain English (e.g. <em>"What is the average transaction total grouped by region?"</em>). The copilot inspects the schema and compiles a corresponding SQL query.</li>
+                <li><strong>Dynamic Self-Healing Loop</strong>: If the compiled SQL fails (due to join errors or column mismatches), the copilot catches the database exception traceback, feeds it back to the compiler prompt, and automatically rewrites the query on the fly.</li>
+                <li><strong>Dynamic Visualization Engine</strong>: The copilot detects if query outputs (like aggregates) are visual-friendly and renders a corresponding Plotly chart in the chat thread.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- TAB 5: Security & Sandboxing -->
+          <div id="guideTab-sandboxing" class="guide-modal-panel">
+            <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;"><i data-lucide="shield" style="color: var(--emerald);"></i> Python Sandboxing &amp; Security</h4>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; display: flex; flex-direction: column; gap: 12px;">
+              <p>To safely run AI-generated data code, Crewlyze implements strict sandboxing architectures:</p>
+              <ul style="margin-left: 18px; display: flex; flex-direction: column; gap: 8px;">
+                <li><strong>Isolated Subprocess Execution</strong>: Pandas cleaning code and Plotly chart scripts run in separate subprocess containers, protecting the main server thread.</li>
+                <li><strong>Import Sanitization Guards</strong>: Scans and blocks code templates containing system calls (`os.system`), shell escapes, filesystem deletions (`shutil`), or outbound network calls (`urllib`, `requests`).</li>
+                <li><strong>Local Directory Layout</strong>: Project workspace directories, original tables, and reports are saved locally at `~/.crewlyze/data/sessions/<session_id>` without cloud storage.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- TAB 6: Cloud & Local LLMs -->
+          <div id="guideTab-gateways" class="guide-modal-panel">
+            <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;"><i data-lucide="key" style="color: var(--amber);"></i> Universal LLM Gateways</h4>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; display: flex; flex-direction: column; gap: 12px;">
+              <p>Crewlyze supports 100+ LLMs via the LiteLLM gateway. Configure providers in the Settings Modal:</p>
+              <ul style="margin-left: 18px; display: flex; flex-direction: column; gap: 8px;">
+                <li><strong>Cloud APIs (OpenAI, Anthropic, Gemini, Groq, Together)</strong>: Input your secure API credentials and enable <em>Show in sidebar</em>. Recommended models are <code>gpt-4o</code>, <code>claude-3-5-sonnet</code>, or <code>gemini/gemini-2.5-flash</code>.</li>
+                <li><strong>Local Offline Execution (Ollama)</strong>: Boot Ollama on your machine (e.g. `ollama run llama3.1`), configure base URL to `http://localhost:11434`, and select model ID matching Ollama registry (e.g. `ollama/llama3.1`). Keep keys blank.</li>
+                <li><strong>Custom Enterprise Proxies</strong>: Use the `custom` provider to route requests to custom, OpenAI-compatible proxy gateways using endpoint URLs and Bearer headers.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- TAB 7: Cooldowns & Throttling -->
+          <div id="guideTab-cooldown" class="guide-modal-panel">
+            <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;"><i data-lucide="hourglass" style="color: var(--violet-light);"></i> Cooldowns &amp; 429 Backoff</h4>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; display: flex; flex-direction: column; gap: 12px;">
+              <p>Heavy agentic workloads generate rapid consecutive API requests, which often trigger rate limits from cloud LLM hosts:</p>
+              <ul style="margin-left: 18px; display: flex; flex-direction: column; gap: 8px;">
+                <li><strong>429 Rate Limits</strong>: Triggered when token-per-minute (TPM) or request-per-minute (RPM) limits are exceeded.</li>
+                <li><strong>API Cooldown Delay</strong>: In General Settings, set the Cooldown timer (1s to 60s). This forces a time buffer between consecutive agent prompts, letting rate limits reset.</li>
+                <li><strong>Mathematical Cooldown Backoff</strong>: When the backend receives a `429` status, it executes an automated retry loop, sleeping for `cooldown * retry_attempt` seconds to recover safely.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- TAB 8: Integrations Hub -->
+          <div id="guideTab-integrations" class="guide-modal-panel">
+            <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;"><i data-lucide="shuffle" style="color: var(--rose);"></i> Outbound Integrations Hub</h4>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; display: flex; flex-direction: column; gap: 12px;">
+              <p>Configure automated dispatch channels in the Integrations tab:</p>
+              <ul style="margin-left: 18px; display: flex; flex-direction: column; gap: 8px;">
+                <li><strong>SMTP Email client</strong>: Provide relay parameters (SMTP host, port: 587 STARTTLS / 465 SSL, credentials). Delivers email summaries and attached PDF reports.</li>
+                <li><strong>Slack Webhooks</strong>: Paste channel Webhook URLs. Dispatches key metric summaries directly to your Slack channels.</li>
+                <li><strong>Discord Webhooks</strong>: Delivers embeds featuring customized border styles, warning metrics, and attached PDF reports.</li>
+                <li><strong>REST Endpoint Webhooks</strong>: POSTs JSON metadata payloads and report files to your custom API endpoints.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- TAB 9: Export Formats & ZIP -->
+          <div id="guideTab-exports" class="guide-modal-panel">
+            <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;"><i data-lucide="download" style="color: var(--violet-light);"></i> Export Formats &amp; ZIP Portability</h4>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; display: flex; flex-direction: column; gap: 12px;">
+              <p>Crewlyze packages project assets in multiple formats for migration and reporting:</p>
+              <ul style="margin-left: 18px; display: flex; flex-direction: column; gap: 8px;">
+                <li><strong>PDF Executive Report</strong>: Renders a structured ReportLab PDF complete with headers, footers, pagination, SWOT matrices, risk indices, and high-res chart images.</li>
+                <li><strong>Jupyter Notebook (.ipynb)</strong>: Exports a complete Jupyter notebook package containing pandas configurations and Plotly visualization code to re-run locally.</li>
+                <li><strong>ZIP Project Backup</strong>: Bundles the configuration settings, the original dataset, the cleaned dataset, charts, logs, and generated reports into a portable archive.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- TAB 10: FAQ & Troubleshooting -->
+          <div id="guideTab-troubleshooting" class="guide-modal-panel">
+            <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;"><i data-lucide="help-circle" style="color: #10b981;"></i> FAQ &amp; Troubleshooting</h4>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; display: flex; flex-direction: column; gap: 10px;">
+              <ul style="margin-left: 18px; display: flex; flex-direction: column; gap: 8px;">
+                <li><strong>Issue: Stale/Orphaned running states</strong>: If page reloads occur during active pipeline execution, the backend recovery hook runs on load, scans the directory, terminates zombie subprocesses, and safely resets records to "failed".</li>
+                <li><strong>Issue: FastAPI CORS Block Errors</strong>: Ensure remote domains are whitelisted in FastAPI's `CORSMiddleware` in `main.py` if hosting the backend on a remote instance.</li>
+                <li><strong>Issue: Large Dataset Crashes (1GB+)</strong>: Ingestion is done in-memory via pandas. For massive datasets, verify that your server is configured with sufficient swap memory, or pre-filter datasets.</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+      
+      <div class="modal-body-gradient" style="pointer-events: none; position: absolute; bottom: 58px; left: 0; right: 0; height: 30px; background: linear-gradient(to top, var(--bg-card), transparent); z-index: 10;"></div>
+      <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-low); display: flex; justify-content: flex-end; gap: 12px; background: var(--bg-card); z-index: 20; position: relative;">
+        <button id="closeGuideBtn" class="btn-secondary">Close Guide</button>
       </div>
     </div>
   </div>
@@ -827,15 +1692,29 @@
 
         <!-- Step 2: Upload CSV -->
         <div id="modalStep2" class="wizard-step">
-          <h3 class="wizard-step-title" id="wizardUploadTitle">Upload CSV Dataset</h3>
-          <p class="wizard-step-desc">Select or drop the CSV file you want the agents to analyze.</p>
+          <h3 class="wizard-step-title" id="wizardUploadTitle">Upload Dataset</h3>
+          <p class="wizard-step-desc">Select or drop a CSV, Excel, or SQLite database file you want to analyze.</p>
 
           <div class="upload-zone" id="uploadZone">
             <div class="upload-icon"><i data-lucide="upload-cloud"></i></div>
-            <div class="upload-title">Drop your CSV here</div>
+            <div class="upload-title">Drop your file here</div>
             <div class="upload-hint">or <label for="fileInput" class="upload-link">browse files</label></div>
-            <input type="file" id="fileInput" accept=".csv" hidden />
+            <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.db,.sqlite,.sqlite3" hidden />
             <div id="uploadedFileMeta" class="upload-meta hidden"></div>
+          </div>
+
+          <!-- Excel Sheet Selector -->
+          <div id="xlsxSheetSelector" class="hidden" style="margin-top: 15px; text-align: left;">
+            <label class="field-label" style="font-weight:600; color:#fff;">Select Excel Sheet to Analyze</label>
+            <select id="xlsxSheetSelect" class="field-select" style="width: 100%; box-sizing: border-box; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-mid); padding: 8px; border-radius: var(--r-sm);"></select>
+            <button id="confirmXlsxSheetBtn" class="btn-primary btn-sm" style="margin-top: 10px; width: 100%; border-radius: var(--r-sm); font-weight: 600;">Load Excel Sheet</button>
+          </div>
+
+          <!-- SQLite Table Selector -->
+          <div id="dbTableSelector" class="hidden" style="margin-top: 15px; text-align: left;">
+            <label class="field-label" style="font-weight:600; color:#fff;">Select Database Table to Analyze</label>
+            <select id="dbTableSelect" class="field-select" style="width: 100%; box-sizing: border-box; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-mid); padding: 8px; border-radius: var(--r-sm);"></select>
+            <button id="confirmDbTableBtn" class="btn-primary btn-sm" style="margin-top: 10px; width: 100%; border-radius: var(--r-sm); font-weight: 600;">Load Database Table</button>
           </div>
 
           <div id="uploadedFileActions" class="upload-actions hidden">
@@ -893,16 +1772,40 @@
     </div>
   </div>
 
-  <!-- Floating Analysis Notification Widget (Top Right, Left of Bell) -->
-  <div id="analysisNotification" class="analysis-notification-toast hidden">
-    <div class="notif-spinner"></div>
-    <div class="notif-content" style="display: flex; flex-direction: column; justify-content: center; min-width: 0; flex: 1;">
-      <div class="notif-title" style="font-size: 0.78rem; font-weight: 700; color: #fff; line-height: 1.2;">Crewlyze Analysis Active</div>
-      <div class="notif-details" style="font-size: 0.68rem; color: var(--text-secondary); margin: 0; line-height: 1.2;"><span id="notifActiveJob">Cleaning...</span> | <span id="notifTimer">00:00</span></div>
-    </div>
-    <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
-      <button id="btnMaximizeNotif" class="btn-primary btn-xs" style="padding: 4px 8px; font-size: 0.68rem; font-weight: 600; border-radius: var(--r-sm); height: 24px; line-height: 24px; display: flex; align-items: center;">View</button>
-      <button id="dismissNotif" class="notif-close-btn" style="font-size: 1.1rem; line-height: 1; color: var(--text-muted); background: none; border: none; cursor: pointer; padding: 0 4px;">✕</button>
+  <!-- Email Share Modal -->
+  <div id="emailShareModal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width: 480px; padding: 24px; border: 1px solid rgba(16, 185, 129, 0.3); background: rgba(18, 18, 22, 0.98); backdrop-filter: blur(16px); border-radius: var(--r-md);">
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;"><i data-lucide="mail" style="width: 20px; height: 20px; color: var(--emerald);"></i> Email Report</h2>
+        <button id="closeEmailShareModalBtn" style="background: transparent; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-secondary); width: auto; padding: 0;">✕</button>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; text-align: left;">
+        <div class="field-group" style="display: flex; flex-direction: column; gap: 4px;">
+          <label class="field-label" style="font-weight: 600; color: var(--text-secondary); font-size: 0.82rem;">Select SMTP Account</label>
+          <select id="emailShareSmtpSelect" class="field-input" style="width:100%; box-sizing:border-box; background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-mid); border-radius:var(--r-sm); padding:8px;"></select>
+        </div>
+        <div class="field-group" style="display: flex; flex-direction: column; gap: 4px;">
+          <label class="field-label" style="font-weight: 600; color: var(--text-secondary); font-size: 0.82rem;">Recipient Email ID</label>
+          <input type="email" id="emailShareRecipientInput" class="field-input" placeholder="e.g. client@company.com" style="width:100%; box-sizing:border-box; padding:8px; background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-mid); border-radius:var(--r-sm);" />
+        </div>
+        <div class="field-group" style="display: flex; flex-direction: column; gap: 4px;">
+          <label class="field-label" style="font-weight: 600; color: var(--text-secondary); font-size: 0.82rem;">Custom Email Subject (Optional)</label>
+          <input type="text" id="emailShareSubjectInput" class="field-input" placeholder="e.g. Executive Performance Report (defaults to Project Name)" style="width:100%; box-sizing:border-box; padding:8px; background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-mid); border-radius:var(--r-sm);" />
+        </div>
+        <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 6px; background: rgba(0,0,0,0.12); padding: 8px 12px; border-radius: var(--r-sm); border: 1px solid var(--border-low);">
+          <span style="font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 2px; display: block;">Select Items to Send:</span>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+            <input type="checkbox" id="emailShareSendPdf" checked /> Attach compiled PDF report file
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+            <input type="checkbox" id="emailShareSendInsights" checked /> Include key strategic observations in email body
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+        <button id="emailShareCancelBtn" class="btn-secondary" style="padding: 8px 16px;">Cancel</button>
+        <button id="emailShareConfirmBtn" class="btn-primary" style="padding: 8px 16px; background: var(--emerald); border-color: var(--emerald);">Send Email</button>
+      </div>
     </div>
   </div>
 

@@ -668,7 +668,8 @@ def run_crew(
                 pass
         except Exception as exc:
             print(f"Cleaning error: {exc}. Activating auto-healing fallback...")
-            traceback.print_exc()
+            if os.getenv("CREWLYZE_DEBUG") == "true":
+                traceback.print_exc()
             clean_output = (
                 f"Data Cleaner encountered an error: {exc}.\n"
                 "- Auto-healing fallback: Skipped active code execution and used raw data copy to prevent pipeline failure."
@@ -699,6 +700,13 @@ def run_crew(
             )
             rel_crew.kickoff()
             relation_output = _safe_output(tasks[1])
+            
+            # Post-processing: if no lines match the expected X and Y relationship format, run fallback
+            has_relations = any(("|" in line and "X:" in line) for line in relation_output.split("\n"))
+            if not has_relations:
+                print("Relationship Analyst output lacked strict format. Generating statistical relation fallback...")
+                relation_output = _run_auto_relation_fallback(df)
+                
             try:
                 if hasattr(rel_crew, "usage_metrics") and rel_crew.usage_metrics:
                     total_tokens += rel_crew.usage_metrics.get("total_tokens", 0)
@@ -706,7 +714,8 @@ def run_crew(
                 pass
         except Exception as e:
             print(f"Relations Agent error: {e}. Activating auto-healing fallback...")
-            traceback.print_exc()
+            if os.getenv("CREWLYZE_DEBUG") == "true":
+                traceback.print_exc()
             relation_output = _run_auto_relation_fallback(df)
 
         stage_times["relations"] = time.time() - start_rel_stage
@@ -747,7 +756,8 @@ def run_crew(
                 pass
         except Exception as exc:
             print(f"Visualization Agent error: {exc}. Activating auto-healing visualizer fallback...")
-            traceback.print_exc()
+            if os.getenv("CREWLYZE_DEBUG") == "true":
+                traceback.print_exc()
             visualize_output = f"Visualization Agent encountered error: {exc}"
 
         # Auto-healing fallback check: if no PNG charts were successfully saved
@@ -801,7 +811,8 @@ def run_crew(
                 pass
         except Exception as e:
             print(f"Insights Agent error: {e}. Activating auto-healing fallback...")
-            traceback.print_exc()
+            if os.getenv("CREWLYZE_DEBUG") == "true":
+                traceback.print_exc()
             insights_output = _run_auto_insights_fallback(df, project_goal)
 
         stage_times["insights"] = time.time() - start_ins_stage
@@ -837,7 +848,8 @@ def run_crew(
                 pass
         except Exception as e:
             print(f"Predictive Agent error: {e}")
-            traceback.print_exc()
+            if os.getenv("CREWLYZE_DEBUG") == "true":
+                traceback.print_exc()
             predictive_output = "Predictive analysis encountered an error."
 
         stage_times["predictive"] = time.time() - start_pred_stage

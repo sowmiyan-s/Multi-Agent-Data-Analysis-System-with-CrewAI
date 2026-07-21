@@ -1,6 +1,6 @@
 {
   "name": "crewlyze",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Autonomous Multi-Agent Business Intelligence and Data Engineering Platform",
   "main": "index.js",
   "repository": {
@@ -30,5 +30,7 @@
   ],
   "author": "Sowmiyan S",
   "license": "MIT",
-  "dependencies": {}
+  "dependencies": {
+    "crewlyze": "^1.0.4"
+  }
 }

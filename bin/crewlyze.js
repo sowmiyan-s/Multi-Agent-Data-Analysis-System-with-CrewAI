@@ -3,6 +3,7 @@ const { execSync, spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const net = require('net');
 
 
 const projectRoot = path.resolve(__dirname, '..');
@@ -55,26 +56,91 @@ const uvicornCmd = process.platform === 'win32'
   ? path.join(venvDir, 'Scripts', 'uvicorn')
   : path.join(venvDir, 'bin', 'uvicorn');
 
-// Start the server
-console.log('\x1b[36m🚀 Starting Crewlyze engine...\x1b[0m\n');
-const serverProcess = spawn(uvicornCmd, ['main:app', '--host', '127.0.0.1', '--port', '8000', '--reload'], {
-  cwd: projectRoot,
-  stdio: 'inherit',
-  env: process.env
-});
+function checkPort(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        resolve(false);
+      } else {
+        resolve(true);
+      }
+    });
+    server.once('listening', () => {
+      server.close(() => {
+        resolve(true);
+      });
+    });
+    server.listen(port, '127.0.0.1');
+  });
+}
 
-serverProcess.on('close', (code) => {
-  console.log(`Server exited with code ${code}`);
-});
-
-// 5. Auto-open default browser
-const url = 'http://127.0.0.1:8000';
-console.log(`🔗 Crewlyze is running at: ${url}`);
-setTimeout(() => {
-  const startCmd = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open';
-  try {
-    spawn(startCmd, [url], { shell: true });
-  } catch (err) {
-    // ignore
+async function getFreePort(startPort) {
+  let port = startPort;
+  while (true) {
+    const isFree = await checkPort(port);
+    if (isFree) {
+      return port;
+    }
+    port++;
   }
-}, 2500);
+}
+
+(async () => {
+  const port = await getFreePort(8000);
+  console.log(`\x1b[36m🚀 Starting Crewlyze engine on port ${port}...\x1b[0m\n`);
+
+  const serverProcess = spawn(uvicornCmd, ['main:app', '--host', '127.0.0.1', '--port', port.toString()], {
+    cwd: projectRoot,
+    stdio: 'inherit',
+    env: process.env
+  });
+
+  const killServer = () => {
+    if (serverProcess) {
+      console.log('\nStopping Crewlyze engine...');
+      if (process.platform === 'win32') {
+        try {
+          execSync(`taskkill /pid ${serverProcess.pid} /t /f`, { stdio: 'ignore' });
+        } catch (e) {
+          try {
+            serverProcess.kill('SIGTERM');
+          } catch (err) {}
+        }
+      } else {
+        try {
+          serverProcess.kill('SIGTERM');
+        } catch (err) {}
+      }
+    }
+  };
+
+  process.on('SIGINT', () => {
+    killServer();
+    process.exit();
+  });
+  process.on('SIGTERM', () => {
+    killServer();
+    process.exit();
+  });
+  process.on('exit', () => {
+    killServer();
+  });
+
+  serverProcess.on('close', (code) => {
+    console.log(`Server exited with code ${code}`);
+    process.exit(code || 0);
+  });
+
+  const url = `http://127.0.0.1:${port}`;
+  console.log(`🔗 Crewlyze is running at: ${url}`);
+
+  setTimeout(() => {
+    const startCmd = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+    try {
+      spawn(startCmd, [url], { shell: true });
+    } catch (err) {
+      // ignore
+    }
+  }, 2500);
+})();

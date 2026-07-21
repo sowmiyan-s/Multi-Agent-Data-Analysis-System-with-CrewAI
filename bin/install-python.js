@@ -32,7 +32,16 @@ try {
 // 2. Create virtual environment inside user's home folder if it doesn't exist
 if (!fs.existsSync(venvDir)) {
   console.log(`\x1b[36m📦 Creating Python virtual environment in ${venvDir}...\x1b[0m`);
-  execSync(`"${pythonCmd}" -m venv "${venvDir}"`, { stdio: 'inherit' });
+  try {
+    execSync(`"${pythonCmd}" -m venv "${venvDir}"`, { stdio: 'inherit' });
+  } catch (err) {
+    console.error('\x1b[31m❌ Error creating Python virtual environment.\x1b[0m');
+    if (process.platform !== 'win32') {
+      console.error('\x1b[33mHint: On Debian/Ubuntu based systems, you may need to install the venv package first:\x1b[0m');
+      console.error('  sudo apt-get install python3-venv\n');
+    }
+    process.exit(1);
+  }
 }
 
 const pipCmd = process.platform === 'win32'

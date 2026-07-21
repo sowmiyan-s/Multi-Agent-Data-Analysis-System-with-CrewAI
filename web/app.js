@@ -85,6 +85,7 @@ const state = {
   previewMinimized: false,
   sseSource:        null, // current EventSource
   resultsCache:     {},   // session_id -> results JSON cache
+  smtpAccounts:     [],   // cache list of SMTP accounts
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -242,6 +243,9 @@ const els = {
   sidebarExportZipBtn:   $('sidebarExportZipBtn'),
   sidebarDownloadCsvBtn: $('sidebarDownloadCsvBtn'),
   sidebarReRunBtn:       $('sidebarReRunBtn'),
+  sidebarShareSlackBtn:   $('sidebarShareSlackBtn'),
+  sidebarShareDiscordBtn: $('sidebarShareDiscordBtn'),
+  sidebarEmailReportBtn:   $('sidebarEmailReportBtn'),
 
   toastContainer:    $('toastContainer'),
 
@@ -744,10 +748,261 @@ async function saveSettingsModal() {
   els.settingsModal.classList.add('hidden');
 }
 
+// Integrations & settings load function
+async function loadIntegrationSettings(skipToast = false) {
+  try {
+    const res = await fetch('/api/config');
+    if (!res.ok) return;
+    const cfg = await res.json();
+    
+    // Load SMTP Accounts
+    state.smtpAccounts = cfg.SMTP_ACCOUNTS || [];
+    renderSmtpAccountsList();
+    
+    // Load Slack
+    const slackEnabled = !!cfg.AUTOMATION_SLACK_ENABLED;
+    const slackEnabledInput = document.getElementById('intSlackEnabled');
+    if (slackEnabledInput) slackEnabledInput.checked = slackEnabled;
+    const slackWebhookInput = document.getElementById('intSlackWebhookUrl');
+    if (slackWebhookInput) slackWebhookInput.value = cfg.SLACK_WEBHOOK_URL || '';
+    const slackSummaryInput = document.getElementById('intSlackSendSummary');
+    if (slackSummaryInput) slackSummaryInput.checked = cfg.SLACK_SEND_SUMMARY !== false;
+    
+    // Load Discord
+    const discordEnabledInput = document.getElementById('intDiscordEnabled');
+    if (discordEnabledInput) discordEnabledInput.checked = !!cfg.AUTOMATION_DISCORD_ENABLED;
+    const separate = !!cfg.DISCORD_SEPARATE_CHANNELS;
+    const discordChannelMode = document.getElementById('intDiscordChannelMode');
+    if (discordChannelMode) discordChannelMode.value = separate ? 'separate' : 'same';
+    document.getElementById('discordSingleChannelGroup')?.classList.toggle('hidden', separate);
+    document.getElementById('discordSeparateChannelsGroup')?.classList.toggle('hidden', !separate);
+    
+    const discordWebhookInput = document.getElementById('intDiscordWebhookUrl');
+    if (discordWebhookInput) discordWebhookInput.value = cfg.DISCORD_WEBHOOK_URL || '';
+    const discordCleaningInput = document.getElementById('intDiscordCleaningEnabled');
+    if (discordCleaningInput) discordCleaningInput.checked = !!cfg.DISCORD_CLEANING_ENABLED;
+    const discordCleaningUrlInput = document.getElementById('intDiscordCleaningUrl');
+    if (discordCleaningUrlInput) discordCleaningUrlInput.value = cfg.DISCORD_CLEANING_URL || '';
+    const discordRelationsInput = document.getElementById('intDiscordRelationsEnabled');
+    if (discordRelationsInput) discordRelationsInput.checked = !!cfg.DISCORD_RELATIONS_ENABLED;
+    const discordRelationsUrlInput = document.getElementById('intDiscordRelationsUrl');
+    if (discordRelationsUrlInput) discordRelationsUrlInput.value = cfg.DISCORD_RELATIONS_URL || '';
+    const discordInsightsInput = document.getElementById('intDiscordInsightsEnabled');
+    if (discordInsightsInput) discordInsightsInput.checked = !!cfg.DISCORD_INSIGHTS_ENABLED;
+    const discordInsightsUrlInput = document.getElementById('intDiscordInsightsUrl');
+    if (discordInsightsUrlInput) discordInsightsUrlInput.value = cfg.DISCORD_INSIGHTS_URL || '';
+    const discordVizInput = document.getElementById('intDiscordVisualizationEnabled');
+    if (discordVizInput) discordVizInput.checked = !!cfg.DISCORD_VISUALIZATION_ENABLED;
+    const discordVizUrlInput = document.getElementById('intDiscordVisualizationUrl');
+    if (discordVizUrlInput) discordVizUrlInput.value = cfg.DISCORD_VISUALIZATION_URL || '';
+    
+    const discordUsernameInput = document.getElementById('intDiscordUsername');
+    if (discordUsernameInput) discordUsernameInput.value = cfg.DISCORD_USERNAME || '';
+    const discordAvatarInput = document.getElementById('intDiscordAvatar');
+    if (discordAvatarInput) discordAvatarInput.value = cfg.DISCORD_AVATAR_URL || '';
+    
+    const color = cfg.DISCORD_EMBED_COLOR || '#5865F2';
+    const discordColorInput = document.getElementById('intDiscordColor');
+    if (discordColorInput) discordColorInput.value = color;
+    const discordColorPickerInput = document.getElementById('intDiscordColorPicker');
+    if (discordColorPickerInput) discordColorPickerInput.value = color.startsWith('#') && color.length === 7 ? color : '#5865F2';
+    
+    const discordMentionInput = document.getElementById('intDiscordMention');
+    if (discordMentionInput) discordMentionInput.value = cfg.DISCORD_MENTION_ROLE || '';
+    const discordSummaryInput = document.getElementById('intDiscordSendSummary');
+    if (discordSummaryInput) discordSummaryInput.checked = cfg.DISCORD_SEND_SUMMARY !== false;
+    const discordPdfInput = document.getElementById('intDiscordAttachPdf');
+    if (discordPdfInput) discordPdfInput.checked = cfg.DISCORD_ATTACH_PDF !== false;
+    const discordChartsInput = document.getElementById('intDiscordAttachCharts');
+    if (discordChartsInput) discordChartsInput.checked = !!cfg.DISCORD_ATTACH_CHARTS;
+    const discordStatsInput = document.getElementById('intDiscordToggleStats');
+    if (discordStatsInput) discordStatsInput.checked = cfg.DISCORD_TOGGLE_STATS !== false;
+    const discordWarningsInput = document.getElementById('intDiscordToggleWarnings');
+    if (discordWarningsInput) discordWarningsInput.checked = cfg.DISCORD_TOGGLE_WARNINGS !== false;
+    
+    // Load Webhook
+    const webhookEnabledInput = document.getElementById('intWebhookEnabled');
+    if (webhookEnabledInput) webhookEnabledInput.checked = !!cfg.AUTOMATION_WEBHOOK_ENABLED;
+    const webhookUrlInput = document.getElementById('intOutboundWebhookUrl');
+    if (webhookUrlInput) webhookUrlInput.value = cfg.OUTBOUND_WEBHOOK_URL || '';
+    const webhookJsonInput = document.getElementById('intWebhookSendJson');
+    if (webhookJsonInput) webhookJsonInput.checked = cfg.WEBHOOK_SEND_JSON !== false;
+    const webhookPdfInput = document.getElementById('intWebhookAttachPdf');
+    if (webhookPdfInput) webhookPdfInput.checked = cfg.WEBHOOK_ATTACH_PDF !== false;
+    
+    if (!skipToast) {
+      toast('Integrations configuration loaded.', 'info');
+    }
+  } catch (err) {
+    console.error('Failed to load integration settings:', err);
+  }
+}
+
+// SMTP accounts list rendering
+function renderSmtpAccountsList() {
+  const listContainer = document.getElementById('intSmtpAccountsList');
+  if (!listContainer) return;
+  listContainer.innerHTML = '';
+  
+  if (!state.smtpAccounts || state.smtpAccounts.length === 0) {
+    listContainer.innerHTML = `<div style="font-size: 0.75rem; color: var(--text-secondary); text-align: center; padding: 12px;">No SMTP accounts configured yet.</div>`;
+    return;
+  }
+  
+  state.smtpAccounts.forEach(acc => {
+    const item = document.createElement('div');
+    item.style = 'display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: var(--r-sm); border: 1px solid var(--border-low);';
+    item.innerHTML = `
+      <div>
+        <div style="font-size: 0.8rem; font-weight: 700; color: #fff;">${acc.name || 'Unnamed Account'}</div>
+        <div style="font-size: 0.68rem; color: var(--text-secondary);">${acc.smtp_user} (${acc.smtp_host}:${acc.smtp_port})</div>
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <button class="btn-xs edit-smtp-btn" data-id="${acc.id}" style="padding: 2px 6px; font-size: 0.65rem; color: var(--cyan); border-color: rgba(6, 182, 212, 0.25); background: rgba(6, 182, 212, 0.05); cursor: pointer; border-radius: var(--r-sm);">Edit</button>
+        <button class="btn-xs delete-smtp-btn" data-id="${acc.id}" style="padding: 2px 6px; font-size: 0.65rem; color: var(--rose); border-color: rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.05); cursor: pointer; border-radius: var(--r-sm);">Delete</button>
+      </div>
+    `;
+    listContainer.appendChild(item);
+  });
+  
+  // Bind actions
+  listContainer.querySelectorAll('.edit-smtp-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute('data-id');
+      const acc = state.smtpAccounts.find(x => x.id === id);
+      if (acc) {
+        document.getElementById('intSmtpAccountId').value = acc.id;
+        document.getElementById('intSmtpAccountName').value = acc.name || '';
+        document.getElementById('intSmtpHost').value = acc.smtp_host || '';
+        document.getElementById('intSmtpPort').value = acc.smtp_port || '587';
+        document.getElementById('intSmtpUser').value = acc.smtp_user || '';
+        document.getElementById('intSmtpPassword').value = acc.smtp_password || '';
+        document.getElementById('intSmtpSender').value = acc.smtp_sender || '';
+        const secureSelect = document.getElementById('intSmtpSecure');
+        if (secureSelect) secureSelect.value = acc.smtp_secure ? 'true' : 'false';
+        
+        const formTitle = document.getElementById('smtpFormTitle');
+        if (formTitle) formTitle.textContent = 'Edit SMTP Account:';
+        const saveBtn = document.getElementById('saveIntSmtpBtn');
+        if (saveBtn) saveBtn.textContent = 'Save Account';
+        document.getElementById('cancelEditSmtpBtn')?.classList.remove('hidden');
+      }
+    });
+  });
+  
+  listContainer.querySelectorAll('.delete-smtp-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute('data-id');
+      if (confirm('Are you sure you want to delete this SMTP account?')) {
+        state.smtpAccounts = state.smtpAccounts.filter(x => x.id !== id);
+        await saveSmtpAccountsToBackend();
+        renderSmtpAccountsList();
+        toast('SMTP Account deleted successfully.', 'success');
+      }
+    });
+  });
+}
+
+function clearSmtpForm() {
+  document.getElementById('intSmtpAccountId').value = '';
+  document.getElementById('intSmtpAccountName').value = '';
+  document.getElementById('intSmtpHost').value = '';
+  document.getElementById('intSmtpPort').value = '587';
+  document.getElementById('intSmtpUser').value = '';
+  document.getElementById('intSmtpPassword').value = '';
+  document.getElementById('intSmtpSender').value = '';
+  const secureSelect = document.getElementById('intSmtpSecure');
+  if (secureSelect) secureSelect.value = 'false';
+  
+  const formTitle = document.getElementById('smtpFormTitle');
+  if (formTitle) formTitle.textContent = 'Add SMTP Account:';
+  const saveBtn = document.getElementById('saveIntSmtpBtn');
+  if (saveBtn) saveBtn.textContent = 'Add Account';
+  document.getElementById('cancelEditSmtpBtn')?.classList.add('hidden');
+}
+
+async function saveSmtpAccountsToBackend() {
+  await fetch('/api/config', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      SMTP_ACCOUNTS: state.smtpAccounts
+    })
+  });
+}
+
+// Integration configuration save
+async function saveIntegrationSettings(intType) {
+  const fd = new FormData();
+  if (intType === 'slack') {
+    fd.append('automation_slack_enabled', $('intSlackEnabled').checked ? 'true' : 'false');
+    fd.append('slack_webhook_url', $('intSlackWebhookUrl').value.trim());
+    fd.append('slack_send_summary', $('intSlackSendSummary').checked ? 'true' : 'false');
+  } else if (intType === 'discord') {
+    fd.append('automation_discord_enabled', $('intDiscordEnabled').checked ? 'true' : 'false');
+    fd.append('discord_separate_channels', $('intDiscordChannelMode').value === 'separate' ? 'true' : 'false');
+    fd.append('discord_webhook_url', $('intDiscordWebhookUrl').value.trim());
+    fd.append('discord_cleaning_enabled', $('intDiscordCleaningEnabled').checked ? 'true' : 'false');
+    fd.append('discord_cleaning_url', $('intDiscordCleaningUrl').value.trim());
+    fd.append('discord_relations_enabled', $('intDiscordRelationsEnabled').checked ? 'true' : 'false');
+    fd.append('discord_relations_url', $('intDiscordRelationsUrl').value.trim());
+    fd.append('discord_insights_enabled', $('intDiscordInsightsEnabled').checked ? 'true' : 'false');
+    fd.append('discord_insights_url', $('intDiscordInsightsUrl').value.trim());
+    fd.append('discord_visualization_enabled', $('intDiscordVisualizationEnabled').checked ? 'true' : 'false');
+    fd.append('discord_visualization_url', $('intDiscordVisualizationUrl').value.trim());
+    fd.append('discord_username', $('intDiscordUsername').value.trim());
+    fd.append('discord_avatar_url', $('intDiscordAvatar').value.trim());
+    fd.append('discord_embed_color', $('intDiscordColor').value.trim());
+    fd.append('discord_mention_role', $('intDiscordMention').value.trim());
+    fd.append('discord_send_summary', $('intDiscordSendSummary').checked ? 'true' : 'false');
+    fd.append('discord_attach_pdf', $('intDiscordAttachPdf').checked ? 'true' : 'false');
+    fd.append('discord_attach_charts', $('intDiscordAttachCharts').checked ? 'true' : 'false');
+    fd.append('discord_toggle_stats', $('intDiscordToggleStats').checked ? 'true' : 'false');
+    fd.append('discord_toggle_warnings', $('intDiscordToggleWarnings').checked ? 'true' : 'false');
+  } else if (intType === 'webhook') {
+    fd.append('automation_webhook_enabled', $('intWebhookEnabled').checked ? 'true' : 'false');
+    fd.append('outbound_webhook_url', $('intOutboundWebhookUrl').value.trim());
+    fd.append('webhook_send_json', $('intWebhookSendJson').checked ? 'true' : 'false');
+    fd.append('webhook_attach_pdf', $('intWebhookAttachPdf').checked ? 'true' : 'false');
+  }
+
+  try {
+    const res = await fetch('/api/config/automation', {
+      method: 'POST',
+      body: fd
+    });
+    if (res.ok) {
+      toast(`${intType.toUpperCase()} settings saved successfully!`, 'success');
+      await loadIntegrationSettings(true); // reload silently
+    } else {
+      toast(`Failed to save ${intType.toUpperCase()} settings.`, 'error');
+    }
+  } catch (err) {
+    toast(`Error saving settings: ${err.message}`, 'error');
+  }
+}
+
+// Active tab indicator slider helper
+function updateTabIndicator(activeBtn) {
+  const tabIndicator = document.querySelector('.settings-tab-indicator');
+  if (tabIndicator && activeBtn) {
+    const parentTop = activeBtn.parentElement.getBoundingClientRect().top;
+    const btnRect = activeBtn.getBoundingClientRect();
+    tabIndicator.style.top = `${btnRect.top - parentTop}px`;
+    tabIndicator.style.height = `${btnRect.height}px`;
+    tabIndicator.style.opacity = '1';
+  }
+}
+
 if (els.sidebarSettingsBtn) {
   els.sidebarSettingsBtn.addEventListener('click', () => {
     try {
       populateSettingsModal();
+      loadIntegrationSettings();
     } catch (e) {
       if (typeof toast === 'function') {
         toast('Error in settings: ' + e.message, 'error');
@@ -756,6 +1011,12 @@ if (els.sidebarSettingsBtn) {
       }
     }
     els.settingsModal.classList.remove('hidden');
+    setTimeout(() => {
+      const activeTabBtn = document.querySelector('.settings-sidebar-tabs button.settings-tab-btn.active');
+      if (activeTabBtn) {
+        updateTabIndicator(activeTabBtn);
+      }
+    }, 50);
   });
 }
 if (els.closeSettingsModal) {
@@ -777,6 +1038,320 @@ if (els.settingsCooldown) {
     els.settingsCooldownVal.textContent = els.settingsCooldown.value;
   });
 }
+
+// Settings vertical tab switching click listeners
+const settingsTabButtons = document.querySelectorAll('.settings-sidebar-tabs button.settings-tab-btn');
+settingsTabButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tabName = btn.getAttribute('data-settings-tab');
+    settingsTabButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    
+    document.querySelectorAll('.settings-tab-panel').forEach(panel => {
+      panel.classList.add('hidden');
+    });
+    const activePanel = document.getElementById(`settingsTab-${tabName}`);
+    if (activePanel) activePanel.classList.remove('hidden');
+    updateTabIndicator(btn);
+  });
+});
+
+// Horizontal Integration sub-tabs switching click listeners
+const intTabButtons = document.querySelectorAll('.modal-integrations-tabs button.modal-int-tab-btn');
+intTabButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const intType = btn.getAttribute('data-int-type');
+    intTabButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    
+    document.querySelectorAll('.modal-int-panel').forEach(panel => {
+      panel.classList.add('hidden');
+    });
+    const activePanel = document.getElementById(`modalIntPanel-${intType}`);
+    if (activePanel) activePanel.classList.remove('hidden');
+  });
+});
+
+// Discord channel mode toggle
+const discordChannelMode = document.getElementById('intDiscordChannelMode');
+if (discordChannelMode) {
+  discordChannelMode.addEventListener('change', () => {
+    const isSeparate = discordChannelMode.value === 'separate';
+    document.getElementById('discordSingleChannelGroup')?.classList.toggle('hidden', isSeparate);
+    document.getElementById('discordSeparateChannelsGroup')?.classList.toggle('hidden', !isSeparate);
+  });
+}
+
+// Discord color picker sync
+const discordColor = document.getElementById('intDiscordColor');
+const discordColorPicker = document.getElementById('intDiscordColorPicker');
+if (discordColorPicker && discordColor) {
+  discordColorPicker.addEventListener('input', () => {
+    discordColor.value = discordColorPicker.value;
+  });
+  discordColor.addEventListener('change', () => {
+    const hex = discordColor.value.trim();
+    if (hex.startsWith('#') && hex.length === 7) {
+      discordColorPicker.value = hex;
+    }
+  });
+}
+
+// SMTP form action listeners
+document.getElementById('cancelEditSmtpBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  clearSmtpForm();
+});
+
+document.getElementById('saveIntSmtpBtn')?.addEventListener('click', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('intSmtpAccountId').value;
+  const name = document.getElementById('intSmtpAccountName').value.trim();
+  const host = document.getElementById('intSmtpHost').value.trim();
+  const port = document.getElementById('intSmtpPort').value.trim();
+  const user = document.getElementById('intSmtpUser').value.trim();
+  const password = document.getElementById('intSmtpPassword').value.trim();
+  const sender = document.getElementById('intSmtpSender').value.trim();
+  const secureSelect = document.getElementById('intSmtpSecure');
+  const secure = secureSelect ? secureSelect.value === 'true' : false;
+  
+  if (!name || !host || !port || !user || !password) {
+    toast('Please fill all required SMTP fields', 'error');
+    return;
+  }
+  
+  const accountData = {
+    id: id || 'smtp_' + Date.now(),
+    name,
+    smtp_host: host,
+    smtp_port: parseInt(port),
+    smtp_user: user,
+    smtp_password: password,
+    smtp_sender: sender || user,
+    smtp_secure: secure
+  };
+  
+  if (id) {
+    const idx = state.smtpAccounts.findIndex(x => x.id === id);
+    if (idx !== -1) state.smtpAccounts[idx] = accountData;
+  } else {
+    state.smtpAccounts.push(accountData);
+  }
+  
+  try {
+    await saveSmtpAccountsToBackend();
+    clearSmtpForm();
+    renderSmtpAccountsList();
+    toast('SMTP Account saved successfully', 'success');
+  } catch (err) {
+    toast('Failed to save SMTP account: ' + err.message, 'error');
+  }
+});
+
+document.getElementById('testIntSmtpBtn')?.addEventListener('click', async (e) => {
+  e.preventDefault();
+  const host = document.getElementById('intSmtpHost').value.trim();
+  const port = document.getElementById('intSmtpPort').value.trim();
+  const user = document.getElementById('intSmtpUser').value.trim();
+  const password = document.getElementById('intSmtpPassword').value.trim();
+  const sender = document.getElementById('intSmtpSender').value.trim();
+  const secureSelect = document.getElementById('intSmtpSecure');
+  const secure = secureSelect ? secureSelect.value === 'true' : false;
+  
+  if (!host || !port || !user || !password) {
+    toast('Please fill SMTP settings to test connection', 'error');
+    return;
+  }
+  
+  const recipient = await customPrompt('Enter test recipient email address:', user, 'test@example.com', 'Test SMTP Connection');
+  if (!recipient) return;
+  
+  toast('Testing SMTP connection...', 'info');
+  try {
+    const fd = new FormData();
+    fd.append('smtp_host', host);
+    fd.append('smtp_port', port);
+    fd.append('smtp_user', user);
+    fd.append('smtp_password', password);
+    fd.append('smtp_sender', sender || user);
+    fd.append('smtp_recipient', recipient);
+    fd.append('smtp_secure', secure ? 'true' : 'false');
+    
+    const res = await fetch('/api/integrations/test/email', {
+      method: 'POST',
+      body: fd
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'success') {
+      toast('SMTP test email sent successfully!', 'success');
+    } else {
+      toast('SMTP test failed: ' + (data.detail || 'check settings'), 'error');
+    }
+  } catch (err) {
+    toast('SMTP test request failed: ' + err.message, 'error');
+  }
+});
+
+// Integration save & test buttons
+document.getElementById('saveIntSlackBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  saveIntegrationSettings('slack');
+});
+document.getElementById('testIntSlackBtn')?.addEventListener('click', async (e) => {
+  e.preventDefault();
+  const url = document.getElementById('intSlackWebhookUrl').value.trim();
+  if (!url) {
+    toast('Please enter Slack Webhook URL to test connection', 'error');
+    return;
+  }
+  toast('Testing Slack webhook...', 'info');
+  try {
+    const fd = new FormData();
+    fd.append('webhook_url', url);
+    const res = await fetch('/api/integrations/test/slack', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (res.ok && data.status === 'success') {
+      toast('Slack test message sent successfully!', 'success');
+    } else {
+      toast('Slack test failed: ' + (data.detail || 'check webhook URL'), 'error');
+    }
+  } catch (err) {
+    toast('Slack test request failed: ' + err.message, 'error');
+  }
+});
+
+document.getElementById('saveIntDiscordBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  saveIntegrationSettings('discord');
+});
+document.getElementById('testIntDiscordBtn')?.addEventListener('click', async (e) => {
+  e.preventDefault();
+  const channelMode = document.getElementById('intDiscordChannelMode').value;
+  let url = '';
+  if (channelMode === 'separate') {
+    if (document.getElementById('intDiscordInsightsEnabled').checked) {
+      url = document.getElementById('intDiscordInsightsUrl').value.trim();
+    } else if (document.getElementById('intDiscordVisualizationEnabled').checked) {
+      url = document.getElementById('intDiscordVisualizationUrl').value.trim();
+    } else if (document.getElementById('intDiscordCleaningEnabled').checked) {
+      url = document.getElementById('intDiscordCleaningUrl').value.trim();
+    } else if (document.getElementById('intDiscordRelationsEnabled').checked) {
+      url = document.getElementById('intDiscordRelationsUrl').value.trim();
+    }
+    if (!url) {
+      url = document.getElementById('intDiscordInsightsUrl').value.trim() ||
+            document.getElementById('intDiscordVisualizationUrl').value.trim() ||
+            document.getElementById('intDiscordCleaningUrl').value.trim() ||
+            document.getElementById('intDiscordRelationsUrl').value.trim();
+    }
+  } else {
+    url = document.getElementById('intDiscordWebhookUrl').value.trim();
+  }
+  
+  if (!url) {
+    toast('Please enter a Discord Webhook URL to test connection', 'error');
+    return;
+  }
+  toast('Testing Discord webhook...', 'info');
+  try {
+    const fd = new FormData();
+    fd.append('webhook_url', url);
+    fd.append('discord_username', document.getElementById('intDiscordUsername').value.trim());
+    fd.append('discord_avatar_url', document.getElementById('intDiscordAvatar').value.trim());
+    fd.append('discord_embed_color', document.getElementById('intDiscordColor').value.trim());
+    fd.append('discord_mention_role', document.getElementById('intDiscordMention').value.trim());
+    fd.append('discord_send_summary', document.getElementById('intDiscordSendSummary').checked ? 'true' : 'false');
+    fd.append('discord_attach_pdf', 'false');
+    
+    const res = await fetch('/api/integrations/test/discord', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (res.ok && data.status === 'success') {
+      toast('Discord test embed sent successfully!', 'success');
+    } else {
+      toast('Discord test failed: ' + (data.detail || 'check webhook URL'), 'error');
+    }
+  } catch (err) {
+    toast('Discord test request failed: ' + err.message, 'error');
+  }
+});
+
+document.getElementById('saveIntWebhookBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  saveIntegrationSettings('webhook');
+});
+document.getElementById('testIntWebhookBtn')?.addEventListener('click', async (e) => {
+  e.preventDefault();
+  const url = document.getElementById('intOutboundWebhookUrl').value.trim();
+  if (!url) {
+    toast('Please enter Webhook Endpoint URL to test connection', 'error');
+    return;
+  }
+  toast('Testing custom webhook...', 'info');
+  try {
+    const fd = new FormData();
+    fd.append('webhook_url', url);
+    const res = await fetch('/api/integrations/test/webhook', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (res.ok && data.status === 'success') {
+      toast('Custom Webhook test connection successful!', 'success');
+    } else {
+      toast('Custom Webhook test failed: ' + (data.detail || 'check URL'), 'error');
+    }
+  } catch (err) {
+    toast('Webhook test request failed: ' + err.message, 'error');
+  }
+});
+
+// Email Share Modal Event Listeners
+document.getElementById('closeEmailShareModalBtn')?.addEventListener('click', () => {
+  document.getElementById('emailShareModal').classList.add('hidden');
+});
+document.getElementById('emailShareCancelBtn')?.addEventListener('click', () => {
+  document.getElementById('emailShareModal').classList.add('hidden');
+});
+document.getElementById('emailShareConfirmBtn')?.addEventListener('click', async () => {
+  const sessionId = state.activeProject?.session_id;
+  if (!sessionId) {
+    toast('No active project session found.', 'error');
+    return;
+  }
+  
+  const smtpAccountId = document.getElementById('emailShareSmtpSelect').value;
+  const recipientEmail = document.getElementById('emailShareRecipientInput').value.trim();
+  const subject = document.getElementById('emailShareSubjectInput').value.trim();
+  const sendPdf = document.getElementById('emailShareSendPdf').checked;
+  const sendInsights = document.getElementById('emailShareSendInsights').checked;
+  
+  if (!recipientEmail) {
+    toast('Please enter a recipient email address.', 'error');
+    return;
+  }
+  
+  toast('Sending email report...', 'info');
+  try {
+    const fd = new FormData();
+    fd.append('session_id', sessionId);
+    if (smtpAccountId) fd.append('smtp_account_id', smtpAccountId);
+    fd.append('recipient_email', recipientEmail);
+    fd.append('subject', subject);
+    fd.append('send_pdf', sendPdf ? 'true' : 'false');
+    fd.append('send_insights', sendInsights ? 'true' : 'false');
+    
+    const res = await fetch('/api/share/email', {
+      method: 'POST',
+      body: fd
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'success') {
+      toast('Email report sent successfully!', 'success');
+      document.getElementById('emailShareModal').classList.add('hidden');
+    } else {
+      toast('Failed to send email: ' + (data.detail || 'check server logs'), 'error');
+    }
+  } catch (err) {
+    toast('Email share request failed: ' + err.message, 'error');
+  }
+});
 
 // ────────────────────────────────────────────────────────────────────────────
 // LLM Provider & Model selector
@@ -1079,13 +1654,33 @@ async function refreshPreviewData(sessionId) {
   }
 }
 
-function updateSidebarProjectActionsVisibility(sec) {
+async function updateSidebarProjectActionsVisibility(sec) {
   const isProjectCompleted = state.activeProject && state.activeProject.status === 'completed';
   if (els.sidebarProjectActions) {
     if (isProjectCompleted) {
       els.sidebarProjectActions.classList.remove('hidden');
+      
+      // Check which integrations are enabled or configured
+      try {
+        const res = await fetch('/api/config');
+        if (res.ok) {
+          const cfg = await res.json();
+          const slackEnabled = !!cfg.AUTOMATION_SLACK_ENABLED || !!cfg.SLACK_WEBHOOK_URL;
+          const discordEnabled = !!cfg.AUTOMATION_DISCORD_ENABLED || !!cfg.DISCORD_WEBHOOK_URL || !!cfg.DISCORD_SEPARATE_CHANNELS;
+          const emailEnabled = cfg.SMTP_ACCOUNTS && cfg.SMTP_ACCOUNTS.length > 0;
+          
+          document.getElementById('sidebarShareSlackBtn')?.classList.toggle('hidden', !slackEnabled);
+          document.getElementById('sidebarShareDiscordBtn')?.classList.toggle('hidden', !discordEnabled);
+          document.getElementById('sidebarEmailReportBtn')?.classList.toggle('hidden', !emailEnabled);
+        }
+      } catch (err) {
+        console.warn('Failed to load integration states for project actions:', err);
+      }
     } else {
       els.sidebarProjectActions.classList.add('hidden');
+      document.getElementById('sidebarShareSlackBtn')?.classList.add('hidden');
+      document.getElementById('sidebarShareDiscordBtn')?.classList.add('hidden');
+      document.getElementById('sidebarEmailReportBtn')?.classList.add('hidden');
     }
   }
 }
@@ -2884,6 +3479,101 @@ function setupExport(sessionId) {
     state.uploadedFile = { name: state.activeProject?.filename || 'dataset.csv' };
     openConfigModal();
   };
+  const exportNotebook = () => {
+    window.location = `/api/export-notebook?session_id=${sessionId}`;
+  };
+
+  const shareSlack = async () => {
+    try {
+      const res = await fetch('/api/config');
+      if (res.ok) {
+        const cfg = await res.json();
+        const url = cfg.SLACK_WEBHOOK_URL;
+        if (!url) {
+          toast('Slack Webhook URL not configured. Please go to settings.', 'error');
+          return;
+        }
+        toast('Sharing report to Slack...', 'info');
+        const fd = new FormData();
+        fd.append('session_id', sessionId);
+        fd.append('webhook_url', url);
+        const postRes = await fetch('/api/share/slack', { method: 'POST', body: fd });
+        if (postRes.ok) {
+          toast('Report shared to Slack successfully!', 'success');
+        } else {
+          const detail = (await postRes.json()).detail || 'Failed';
+          toast('Slack share failed: ' + detail, 'error');
+        }
+      }
+    } catch (err) {
+      toast('Slack share failed: ' + err.message, 'error');
+    }
+  };
+
+  const shareDiscord = async () => {
+    try {
+      const res = await fetch('/api/config');
+      if (res.ok) {
+        const cfg = await res.json();
+        let url = cfg.DISCORD_WEBHOOK_URL;
+        if (cfg.DISCORD_SEPARATE_CHANNELS) {
+          url = cfg.DISCORD_INSIGHTS_URL || cfg.DISCORD_WEBHOOK_URL;
+        }
+        if (!url) {
+          toast('Discord Webhook URL not configured. Please go to settings.', 'error');
+          return;
+        }
+        toast('Sharing report to Discord...', 'info');
+        const fd = new FormData();
+        fd.append('session_id', sessionId);
+        fd.append('webhook_url', url);
+        const postRes = await fetch('/api/share/discord', { method: 'POST', body: fd });
+        if (postRes.ok) {
+          toast('Report shared to Discord successfully!', 'success');
+        } else {
+          const detail = (await postRes.json()).detail || 'Failed';
+          toast('Discord share failed: ' + detail, 'error');
+        }
+      }
+    } catch (err) {
+      toast('Discord share failed: ' + err.message, 'error');
+    }
+  };
+
+  const openEmailModal = async () => {
+    const select = document.getElementById('emailShareSmtpSelect');
+    if (select) {
+      select.innerHTML = '';
+      try {
+        const res = await fetch('/api/config');
+        if (res.ok) {
+          const cfg = await res.json();
+          const accounts = cfg.SMTP_ACCOUNTS || [];
+          if (accounts.length === 0) {
+            toast('Please configure SMTP accounts in Settings first.', 'error');
+            return;
+          }
+          accounts.forEach(acc => {
+            const opt = document.createElement('option');
+            opt.value = acc.id;
+            opt.textContent = `${acc.name || 'SMTP'} (${acc.smtp_user})`;
+            select.appendChild(opt);
+          });
+        }
+      } catch (err) {
+        toast('Failed to load SMTP accounts: ' + err.message, 'error');
+        return;
+      }
+    }
+    
+    const subjectInput = document.getElementById('emailShareSubjectInput');
+    if (subjectInput && state.activeProject) {
+      subjectInput.value = state.activeProject.name || '';
+    }
+    
+    document.getElementById('emailShareRecipientInput').value = '';
+    document.getElementById('emailShareModal').classList.remove('hidden');
+  };
 
   els.exportPdfBtn.onclick = exportPdf;
   if (els.sidebarExportPdfBtn) els.sidebarExportPdfBtn.onclick = exportPdf;
@@ -2896,6 +3586,13 @@ function setupExport(sessionId) {
 
   els.reRunBtn.onclick = reRun;
   if (els.sidebarReRunBtn) els.sidebarReRunBtn.onclick = reRun;
+
+  const exportNotebookBtn = document.getElementById('sidebarExportNotebookBtn');
+  if (exportNotebookBtn) exportNotebookBtn.onclick = exportNotebook;
+
+  if (els.sidebarShareSlackBtn) els.sidebarShareSlackBtn.onclick = shareSlack;
+  if (els.sidebarShareDiscordBtn) els.sidebarShareDiscordBtn.onclick = shareDiscord;
+  if (els.sidebarEmailReportBtn) els.sidebarEmailReportBtn.onclick = openEmailModal;
 }
 
 // ────────────────────────────────────────────────────────────────────────────

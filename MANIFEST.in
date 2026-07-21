@@ -1,0 +1,9 @@
+include main.py
+include crew.py
+recursive-include web *
+recursive-include assets *
+recursive-include tools *
+recursive-include config *
+recursive-include workflows *
+recursive-include ui *
+recursive-include agents *
