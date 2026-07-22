@@ -21,6 +21,7 @@ import sys
 import textwrap
 import uuid
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 from crewai import LLM
